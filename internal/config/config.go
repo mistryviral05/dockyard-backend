@@ -12,9 +12,14 @@ type HTTPServer struct {
 	Addr string `yaml:"address" env-required:"true" env-default:":8080"`
 }
 
+type Clerk struct {
+	SecretKey string `yaml:"secret_key" env-required:"true"`
+}
+
 type Config struct {
 	Env        string `yaml:"env" env-required:"true" env-default:"production"`
 	HTTPServer `yaml:"http_server"`
+	Clerk      `yaml:"clerk"`
 }
 
 func MustLoad() *Config {
