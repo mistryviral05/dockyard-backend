@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
 )
@@ -16,10 +17,23 @@ type Clerk struct {
 	SecretKey string `yaml:"secret_key" env-required:"true"`
 }
 
+type Database struct {
+	Host            string        `yaml:"host" env:"DB_HOST" env-default:"localhost"`
+	Port            int           `yaml:"port" env:"DB_PORT" env-default:"5432"`
+	User            string        `yaml:"user" env:"DB_USER" env-default:"postgres"`
+	Password        string        `yaml:"password" env:"DB_PASSWORD" env-default:"postgres"`
+	Name            string        `yaml:"name" env:"DB_NAME" env-default:"dockyard"`
+	SSLMode         string        `yaml:"sslmode" env:"DB_SSLMODE" env-default:"disable"`
+	MaxOpenConns    int           `yaml:"max_open_conns" env:"DB_MAX_OPEN_CONNS" env-default:"25"`
+	MaxIdleConns    int           `yaml:"max_idle_conns" env:"DB_MAX_IDLE_CONNS" env-default:"25"`
+	ConnMaxLifetime time.Duration `yaml:"conn_max_lifetime" env:"DB_CONN_MAX_LIFETIME" env-default:"5m"`
+}
+
 type Config struct {
 	Env        string `yaml:"env" env-required:"true" env-default:"production"`
 	HTTPServer `yaml:"http_server"`
 	Clerk      `yaml:"clerk"`
+	Database   `yaml:"database"`
 }
 
 func MustLoad() *Config {
