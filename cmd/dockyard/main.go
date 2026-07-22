@@ -15,6 +15,7 @@ import (
 	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
 	"github.com/clerk/clerk-sdk-go/v2/user"
 	"github.com/mistryviral05/dockyard/internal/config"
+	postgres "github.com/mistryviral05/dockyard/internal/http/database"
 )
 
 func main() {
@@ -27,6 +28,11 @@ func main() {
 	clerk.SetKey(cfg.Clerk.SecretKey)
 
 	// setup database
+	_, err := postgres.New(cfg.Database)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	slog.Info("database connected successfully")
 	// setup router
 	router := http.NewServeMux()
 
