@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
@@ -12,10 +11,9 @@ import (
 	"time"
 
 	"github.com/clerk/clerk-sdk-go/v2"
-	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
-	"github.com/clerk/clerk-sdk-go/v2/user"
 	"github.com/mistryviral05/dockyard/internal/config"
 	postgres "github.com/mistryviral05/dockyard/internal/http/database"
+	"github.com/mistryviral05/dockyard/internal/logger"
 )
 
 func main() {
@@ -24,24 +22,22 @@ func main() {
 	ctx := context.Background()
 	//load the config
 	cfg := config.MustLoad()
+	logger := logger.New()
 
 	clerk.SetKey(cfg.Clerk.SecretKey)
 
 	// setup database
-	_, err := postgres.New(cfg.Database)
+	db, err := postgres.New(cfg.Database)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	slog.Info("database connected successfully")
+	defer db.Close()
+	logger.Info("Database connected",
+		slog.String("host", cfg.Database.Host),
+		slog.String("db", cfg.Database.Name),
+	)
 	// setup router
 	router := http.NewServeMux()
-
-	router.HandleFunc("/", publicRoute)
-	protectedHandler := http.HandlerFunc(protectedRoute)
-	router.Handle(
-		"/protected",
-		clerkhttp.WithHeaderAuthorization()(protectedHandler),
-	)
 
 	server := http.Server{
 		Addr:    cfg.Addr,
@@ -51,40 +47,23 @@ func main() {
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		slog.Info("server is started", slog.String("on", cfg.Addr))
+		logger.Info("Server started",
+			slog.String("address", cfg.Addr),
+		)
 		err := server.ListenAndServe()
 
 		if err != nil {
-			log.Fatalf("Faild to start server : %s", err.Error())
+			log.Fatalf("Failed to start server : %s", err.Error())
 		}
 	}()
 	<-done
 
-	slog.Info("server is shutting down...")
-
+	logger.Info("Server is shutting down...")
 	ctx, cancle := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancle()
 	if err := server.Shutdown(ctx); err != nil {
-		slog.Error("failed to shutdown server : ", slog.String("error : ", err.Error()))
+		logger.Error("failed to shutdown server : ", slog.String("error : ", err.Error()))
 	}
+	logger.Info("Server stopped")
 
-}
-
-func publicRoute(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(`{"access": "public"}`))
-}
-
-func protectedRoute(w http.ResponseWriter, r *http.Request) {
-	claims, ok := clerk.SessionClaimsFromContext(r.Context())
-	if !ok {
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"access": "unauthorized"}`))
-		return
-	}
-
-	usr, err := user.Get(r.Context(), claims.Subject)
-	if err != nil {
-		// handle the error
-	}
-	fmt.Fprintf(w, `{"user_id": "%s", "user_banned": "%t"}`, usr.ID, usr.Banned)
 }

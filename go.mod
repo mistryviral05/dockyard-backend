@@ -6,6 +6,7 @@ require (
 	github.com/clerk/clerk-sdk-go/v2 v2.7.0
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/lib/pq v1.12.3
+	github.com/lmittmann/tint v1.2.0
 )
 
 require (
