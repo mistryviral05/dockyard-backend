@@ -21,9 +21,9 @@ func NewRepository(db *sql.DB) Repository {
 
 func (r *repository) Create(ctx context.Context, dto CreateUserDto) error {
 
-	query := "INSERT INTO users (clerk_id,email,name) VALUES (?,?,?)"
+	q := "INSERT INTO users (clerk_id,email,name) VALUES (?,?,?)"
 
-	stmt, err := r.db.PrepareContext(ctx, query)
+	stmt, err := r.db.PrepareContext(ctx, q)
 	if err != nil {
 		return err
 	}

@@ -13,6 +13,8 @@ import (
 	"github.com/clerk/clerk-sdk-go/v2"
 	"github.com/mistryviral05/dockyard/internal/config"
 	postgres "github.com/mistryviral05/dockyard/internal/http/database"
+	"github.com/mistryviral05/dockyard/internal/http/modules/user"
+	"github.com/mistryviral05/dockyard/internal/http/router"
 	"github.com/mistryviral05/dockyard/internal/logger"
 )
 
@@ -37,11 +39,16 @@ func main() {
 		slog.String("db", cfg.Database.Name),
 	)
 	// setup router
-	router := http.NewServeMux()
+	// router := http.NewServeMux()
+
+	modules := router.Modules{
+		User : user.New(db),
+	}
+	r := router.New(modules)
 
 	server := http.Server{
 		Addr:    cfg.Addr,
-		Handler: router,
+		Handler: r,
 	}
 	//start server
 	done := make(chan os.Signal, 1)
