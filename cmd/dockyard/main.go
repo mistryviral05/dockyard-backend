@@ -42,7 +42,7 @@ func main() {
 	// router := http.NewServeMux()
 
 	modules := router.Modules{
-		User : user.New(db),
+		User: user.New(db, logger),
 	}
 	r := router.New(modules)
 

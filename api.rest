@@ -1,0 +1,10 @@
+@base=http://localhost:4000/api/v1
+
+
+POST {{base}}/users/webhook/clerk
+Content-Type: application/json
+
+{
+  "user_id": "12345",
+  "email": "user@example.com"
+}

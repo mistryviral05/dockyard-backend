@@ -1,10 +1,13 @@
 package user
 
-import "database/sql"
+import (
+	"database/sql"
+	"log/slog"
+)
 
-func New(db *sql.DB) *Handler {
-	repo := NewRepository(db)
-	service := NewService(repo)
-	handler := NewHandler(service)
+func New(db *sql.DB, logger *slog.Logger) *Handler {
+	repo := newRepository(db)
+	service := newService(repo)
+	handler := newHandler(service, logger)
 	return handler
 }

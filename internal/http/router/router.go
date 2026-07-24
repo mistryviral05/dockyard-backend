@@ -12,7 +12,8 @@ type Modules struct {
 
 func New(m Modules) http.Handler {
 	mux := http.NewServeMux()
-	user.RegisterRoutes(mux, m.User)
+	const base = "/api"
+	user.RegisterRoutes(mux, m.User, base)
 
 	return mux
 }
