@@ -4,7 +4,7 @@ APP=dockyard
 # Override per environment: make migrate-up DB_URL="postgres://..."
 # On a MySQL move: point MIGRATIONS_DIR at db/migrations/mysql and swap DB_URL —
 # no other changes needed.
-DB_URL?=postgres://postgres:postgres@localhost:5432/dockyard?sslmode=disable
+DB_URL?=postgres://postgres:password@localhost:5432/dockyard?sslmode=disable
 MIGRATIONS_DIR=db/migrations/postgres
 
 run:

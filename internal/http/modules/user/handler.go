@@ -30,10 +30,10 @@ func (h *Handler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&event)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			response.WriteJson(w, http.StatusBadRequest, response.GeneralError(fmt.Errorf("request body cannot be empty")))
+			response.BadRequest(w, "request body cannot be empty")
 			return
 		}
-		response.WriteJson(w, http.StatusBadRequest, response.GeneralError(fmt.Errorf("invalid request body")))
+		response.BadRequest(w, "invalid request body")
 		return
 	}
 
@@ -41,18 +41,24 @@ func (h *Handler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	case "user.created":
 		var userData ClerkUserData
 		if err := json.Unmarshal(event.Data, &userData); err != nil {
-			response.WriteJson(w, http.StatusBadRequest, response.GeneralError(fmt.Errorf("invalid user data")))
+			response.BadRequest(w, "invalid user data")
 			return
 		}
 		dto := userData.ToCreateUserDto()
-		h.logger.Info("User created", slog.Any("user", dto))
+		if err := h.service.createUser(r.Context(), dto); err != nil {
+			h.logger.Error("failed to create user", slog.String("error", err.Error()))
+			response.InternalError(w, "failed to create user!")
+			return
+		}
+		h.logger.Info("User created successfully!." + dto.ClerkId)
 	case "user.deleted":
 		h.logger.Info("User deleted")
 	case "user.updated":
 		h.logger.Info("User updated")
 	default:
 		h.logger.Error("unsupported event type", slog.String("event_type", event.Type))
-		response.WriteJson(w, http.StatusBadRequest, response.GeneralError(fmt.Errorf("unsupported event type: %s", event.Type)))
+		response.BadRequest(w, fmt.Sprintf("unsupported event type: %s", event.Type))
+		return
 	}
 
 	response.WriteJson(w, http.StatusNoContent, nil)

@@ -12,6 +12,6 @@ func newService(repo Repository) *Service {
 	}
 }
 
-func (s *Service) createUser(ctx context.Context,dto CreateUserDto) error {
-	return s.repo.create(ctx,dto)
+func (s *Service) createUser(ctx context.Context, dto *CreateUserDto) error {
+	return s.repo.create(ctx, dto)
 }

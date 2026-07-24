@@ -8,6 +8,7 @@ require (
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/lib/pq v1.12.3
 	github.com/lmittmann/tint v1.2.0
+	github.com/nrednav/cuid2 v1.1.0
 )
 
 require (
