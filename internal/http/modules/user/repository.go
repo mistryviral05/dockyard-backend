@@ -3,41 +3,48 @@ package user
 import (
 	"context"
 	"database/sql"
+	"errors"
 
+	postgres "github.com/mistryviral05/dockyard/internal/http/database"
 	"github.com/mistryviral05/dockyard/internal/http/utils/id"
 )
 
 type Repository interface {
-	create(ctx context.Context, dto *CreateUserDto) error
+	Create(ctx context.Context, dto *CreateUserDto) (string, bool, error)
+	WithTx(db postgres.DBTX) Repository
 }
 
 type repository struct {
-	db *sql.DB
+	db postgres.DBTX
 }
 
-func newRepository(db *sql.DB) Repository {
+func NewRepository(db *sql.DB) Repository {
 	return &repository{
 		db: db,
 	}
 }
 
-func (r *repository) create(ctx context.Context, dto *CreateUserDto) error {
+func (r *repository) WithTx(db postgres.DBTX) Repository {
+	return &repository{db: db}
+}
 
-	q := `
-	INSERT INTO users (id,clerk_id, email, name)
-	VALUES ($1, $2, $3,$4)
-	`
+func (r *repository) Create(ctx context.Context, dto *CreateUserDto) (string, bool, error) {
 
-	stmt, err := r.db.PrepareContext(ctx, q)
-	if err != nil {
-		return err
+	newID := id.UserID()
+
+	var insertedID string
+	err := r.db.QueryRowContext(ctx, `
+		INSERT INTO users (id, clerk_id, email, name)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (clerk_id) DO NOTHING
+		RETURNING id
+	`, newID, dto.ClerkId, dto.Email, dto.Name).Scan(&insertedID)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
 	}
-	defer stmt.Close()
-	userId := id.UserID()
-	_, err = stmt.ExecContext(ctx, userId, dto.ClerkId, dto.Email, dto.Name)
 	if err != nil {
-		return err
+		return "", false, err
 	}
-
-	return nil
+	return insertedID, true, nil
 }

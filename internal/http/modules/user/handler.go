@@ -18,7 +18,7 @@ type Handler struct {
 	cfg     *config.Config
 }
 
-func newHandler(service *Service, logger *slog.Logger, cfg *config.Config) *Handler {
+func NewHandler(service *Service, logger *slog.Logger, cfg *config.Config) *Handler {
 	return &Handler{
 		service: service,
 		logger:  logger,
@@ -26,7 +26,7 @@ func newHandler(service *Service, logger *slog.Logger, cfg *config.Config) *Hand
 	}
 }
 
-func (h *Handler) handleWebhook(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	var event ClerkEvent
 
@@ -48,7 +48,7 @@ func (h *Handler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		dto := userData.ToCreateUserDto()
-		if err := h.service.createUser(r.Context(), dto); err != nil {
+		if err := h.service.CreateUserWithWorkspace(r.Context(), dto); err != nil {
 			h.logger.Error("failed to create user", slog.String("error", err.Error()))
 			response.InternalError(w, "failed to create user!")
 			return

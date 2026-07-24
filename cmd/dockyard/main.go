@@ -15,6 +15,7 @@ import (
 	postgres "github.com/mistryviral05/dockyard/internal/http/database"
 	"github.com/mistryviral05/dockyard/internal/http/middleware"
 	"github.com/mistryviral05/dockyard/internal/http/modules/user"
+	"github.com/mistryviral05/dockyard/internal/http/modules/workspace"
 	"github.com/mistryviral05/dockyard/internal/http/router"
 	"github.com/mistryviral05/dockyard/internal/logger"
 )
@@ -41,9 +42,9 @@ func main() {
 	)
 	// setup router
 	// router := http.NewServeMux()
-
+	workspace := workspace.New(db)
 	modules := router.Modules{
-		User: user.New(db, logger, cfg),
+		User: user.New(db, logger, cfg, workspace.Repo),
 	}
 	r := router.New(modules)
 
