@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS envs;
+DROP TABLE IF EXISTS projects;
