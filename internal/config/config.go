@@ -15,6 +15,7 @@ type HTTPServer struct {
 
 type Clerk struct {
 	SecretKey string `yaml:"secret_key" env-required:"true"`
+	WebhookSecret string `yaml:"webhook_secret" env-required:"true"`
 }
 
 type Database struct {

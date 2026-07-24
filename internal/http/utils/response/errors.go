@@ -16,3 +16,7 @@ func InternalError(w http.ResponseWriter, m string) error {
 func BadRequest(w http.ResponseWriter, m string) error {
 	return WriteJson(w, http.StatusBadRequest, GeneralError(errors.New(m)))
 }
+
+func Unauthorized(w http.ResponseWriter, m string) error {
+	return WriteJson(w, http.StatusUnauthorized, GeneralError(errors.New(m)))
+}

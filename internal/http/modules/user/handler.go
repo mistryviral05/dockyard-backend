@@ -8,18 +8,21 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/mistryviral05/dockyard/internal/config"
 	"github.com/mistryviral05/dockyard/internal/http/utils/response"
 )
 
 type Handler struct {
 	service *Service
 	logger  *slog.Logger
+	cfg     *config.Config
 }
 
-func newHandler(service *Service, logger *slog.Logger) *Handler {
+func newHandler(service *Service, logger *slog.Logger, cfg *config.Config) *Handler {
 	return &Handler{
 		service: service,
 		logger:  logger,
+		cfg:     cfg,
 	}
 }
 
