@@ -13,6 +13,7 @@ import (
 	"github.com/clerk/clerk-sdk-go/v2"
 	"github.com/mistryviral05/dockyard/internal/config"
 	postgres "github.com/mistryviral05/dockyard/internal/http/database"
+	"github.com/mistryviral05/dockyard/internal/http/middleware"
 	"github.com/mistryviral05/dockyard/internal/http/modules/user"
 	"github.com/mistryviral05/dockyard/internal/http/router"
 	"github.com/mistryviral05/dockyard/internal/logger"
@@ -48,7 +49,7 @@ func main() {
 
 	server := http.Server{
 		Addr:    cfg.Addr,
-		Handler: r,
+		Handler: middleware.Recover(logger)(r),
 	}
 	//start server
 	done := make(chan os.Signal, 1)
