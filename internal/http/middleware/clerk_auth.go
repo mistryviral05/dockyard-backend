@@ -23,7 +23,7 @@ func RequireAuth() func(http.Handler) http.Handler {
 		return clerkhttp.WithHeaderAuthorization()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			claims, ok := clerk.SessionClaimsFromContext(r.Context())
 			if !ok || claims.Subject == "" {
-				response.Unauthorized(w, "unauthenticated")
+				response.Unauthorized(w, "You are not authorized to access this resource")
 				return
 			}
 

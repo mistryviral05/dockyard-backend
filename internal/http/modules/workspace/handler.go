@@ -63,3 +63,16 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	response.WriteJson(w, http.StatusCreated, response.GeneralMessage("workspace created: "+id))
 }
+
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	// set by middleware.RequireAuth — the internal users.id
+	userID, _ := middleware.ClerkIDFromContext(r.Context())
+	workspaces, err := h.service.Get(r.Context(), userID)
+	if err != nil {
+		h.logger.Error("failed to get workspaces", slog.String("error", err.Error()))
+		response.InternalError(w, "failed to get workspaces")
+		return
+	}
+
+	response.WriteJson(w, http.StatusOK, workspaces)
+}

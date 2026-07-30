@@ -8,3 +8,12 @@ Content-Type: application/json
   "user_id": "12345",
   "email": "user@example.com"
 }
+
+### 
+POST {{base}}/workspaces
+Content-Type: application/json
+
+{
+  "name": "My Workspace",
+  "slug": "my-workspace"
+}

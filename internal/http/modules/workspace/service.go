@@ -21,3 +21,7 @@ func NewService(db *sql.DB, repo Repository) *Service {
 func (s *Service) Create(ctx context.Context, dto *CreateWorkspaceDto) (string, error) {
 	return s.repo.Create(ctx, dto)
 }
+
+func (s *Service) Get(ctx context.Context, userId string) ([]*Workspace, error) {
+	return s.repo.GetByUserId(ctx, userId)
+}

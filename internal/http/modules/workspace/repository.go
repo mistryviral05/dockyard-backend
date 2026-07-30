@@ -10,6 +10,7 @@ import (
 type Repository interface {
 	CreateDefault(ctx context.Context, userId string) (string, error)
 	Create(ctx context.Context, dto *CreateWorkspaceDto) (string, error)
+	GetByUserId(ctx context.Context, userId string) ([]*Workspace, error)
 	WithTx(db postgres.DBTX) Repository // rebinds the repo onto a transaction
 }
 
@@ -50,4 +51,24 @@ func (r *repository) CreateDefault(ctx context.Context, userId string) (string, 
 		return "", err
 	}
 	return wsId, nil
+}
+
+// Create Get Workspaces details by user id
+func (r *repository) GetByUserId(ctx context.Context,userId string) ([]*Workspace, error) {
+
+	rows,err := r.db.QueryContext(ctx,"SELECT id, wsp_name, wsp_slug FROM workspaces WHERE user_id = $1", userId)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var workspaces []*Workspace
+	for rows.Next() {
+		var ws Workspace
+		if err := rows.Scan(&ws.Id, &ws.WspName, &ws.WspSlug); err != nil {
+			return nil, err
+		}
+		workspaces = append(workspaces, &ws)
+	}
+	return workspaces, nil
 }
