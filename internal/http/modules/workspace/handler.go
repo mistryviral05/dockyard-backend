@@ -49,9 +49,9 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dto := &CreateWorkspaceDto{
-		UserId: userID,
-		Name:   req.Name,
-		Slug:   req.Slug,
+		ClerkId: userID,
+		Name:    req.Name,
+		Slug:    req.Slug,
 	}
 
 	id, err := h.service.Create(r.Context(), dto)

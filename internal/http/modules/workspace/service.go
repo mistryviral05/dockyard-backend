@@ -22,6 +22,6 @@ func (s *Service) Create(ctx context.Context, dto *CreateWorkspaceDto) (string, 
 	return s.repo.Create(ctx, dto)
 }
 
-func (s *Service) Get(ctx context.Context, userId string) ([]*Workspace, error) {
-	return s.repo.GetByUserId(ctx, userId)
+func (s *Service) Get(ctx context.Context, clerkId string) ([]*Workspace, error) {
+	return s.repo.GetByClerkId(ctx, clerkId)
 }
