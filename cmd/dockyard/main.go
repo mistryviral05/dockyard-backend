@@ -46,7 +46,7 @@ func main() {
 
 	wsModule := workspace.New(db, logger)
 	userModule := user.New(db, logger, cfg, wsModule.Repo)
-	authMW := middleware.RequireAuth()
+	authMW := middleware.RequireAuth(logger)
 
 	modules := router.Modules{
 		User:      userModule,
