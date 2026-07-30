@@ -40,11 +40,18 @@ func main() {
 		slog.String("host", cfg.Database.Host),
 		slog.String("db", cfg.Database.Name),
 	)
-	// setup router
-	// router := http.NewServeMux()
-	workspace := workspace.New(db)
+	// add imports:
+	//   "github.com/mistryviral05/dockyard/internal/http/middleware"
+	//   "github.com/mistryviral05/dockyard/internal/http/modules/workspace"
+
+	wsModule := workspace.New(db, logger)
+	userModule := user.New(db, logger, cfg, wsModule.Repo)
+	authMW := middleware.RequireAuth()
+
 	modules := router.Modules{
-		User: user.New(db, logger, cfg, workspace.Repo),
+		User:      userModule,
+		Workspace: wsModule.Handler,
+		Auth:      authMW,
 	}
 	r := router.New(modules)
 
