@@ -17,7 +17,6 @@ func New(secret string) *Signer {
 	}
 }
 
-
 func (s *Signer) Sign(c interface{}, t time.Time) (string, error) {
 	sig, err := jose.NewSigner(
 		jose.SigningKey{Algorithm: jose.HS256, Key: []byte(s.secret)},
@@ -42,7 +41,7 @@ func (s *Signer) Verify(t string, c interface{}) error {
 		return err
 	}
 	var std jwt.Claims
-	if err := tok.Claims(s.secret, &std, c); err != nil {
+	if err := tok.Claims([]byte(s.secret), &std, c); err != nil {
 		return err
 	}
 	return std.Validate(jwt.Expected{Time: time.Now()})
