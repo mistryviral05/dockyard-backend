@@ -10,9 +10,7 @@ import (
 	"github.com/mistryviral05/dockyard/internal/config"
 )
 
-// DBTX is satisfied by BOTH *sql.DB and *sql.Tx.
-// Repository methods take a DBTX so the caller decides whether the query
-// runs standalone (auto-commit via *sql.DB) or inside a transaction (*sql.Tx).
+
 type DBTX interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)

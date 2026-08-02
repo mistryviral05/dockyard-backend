@@ -39,3 +39,6 @@ func AgentID() string {
 func DeploymentID() string {
 	return "deployment_" + generate()
 }
+func InstallationID() string {
+	return "installation_" + generate()
+}
