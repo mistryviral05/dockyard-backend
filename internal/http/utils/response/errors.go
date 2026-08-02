@@ -8,7 +8,9 @@ import (
 func NewError(w http.ResponseWriter, s int, m string) error {
 	return WriteJson(w, s, GeneralError(errors.New(m)))
 }
-
+func NotFound(w http.ResponseWriter, m string) error {
+	return WriteJson(w, http.StatusNotFound, GeneralError(errors.New(m)))
+}
 func InternalError(w http.ResponseWriter, m string) error {
 	return WriteJson(w, http.StatusInternalServerError, GeneralError(errors.New(m)))
 }
