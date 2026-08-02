@@ -29,7 +29,7 @@ type StateClaims struct {
 	ClerkId string `json:"clerk_id"`
 }
 
-func (s *Service) CreateInstallation(clerkId string) (string, error) {
+func (s *Service) CreateInstallationLink(clerkId string) (string, error) {
 	claims := StateClaims{
 		ClerkId: clerkId,
 	}

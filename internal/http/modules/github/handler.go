@@ -20,9 +20,9 @@ func NewHandler(service *Service, logger *slog.Logger) *Handler {
 	}
 }
 
-func (h *Handler) CreateInstallation(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetInstallationLink(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.ClerkIDFromContext(r.Context())
-	link, err := h.service.CreateInstallation(userID)
+	link, err := h.service.CreateInstallationLink(userID)
 	if err != nil {
 		h.logger.Error("failed to create installation link", slog.String("error", err.Error()))
 		response.InternalError(w, "failed to login with github")
