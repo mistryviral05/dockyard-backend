@@ -37,6 +37,7 @@ type Github struct {
 	ClientSecret   string `yaml:"client_secret" env-required:"true"`
 	PrivateKeyPath string `yaml:"private_key_path" env-required:"true"`
 	WebhookSecret  string `yaml:"webhook_secret" env-required:"true"`
+	StateSecret     string `yaml:"state_secret" env-required:"true"`
 
 }
 

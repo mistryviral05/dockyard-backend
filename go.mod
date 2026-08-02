@@ -4,6 +4,7 @@ go 1.26.3
 
 require (
 	github.com/clerk/clerk-sdk-go/v2 v2.7.0
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/lib/pq v1.12.3

@@ -19,6 +19,11 @@ type GeneralResponse struct {
 	Message interface{} `json:"message"`
 }
 
+type GeneralDataResponse struct {
+	Status string      `json:"status"`
+	Data   interface{} `json:"data"`
+}
+
 const (
 	StatusSuccess = "success"
 	StatusError   = "error"
@@ -41,6 +46,13 @@ func GeneralMessage(msg string) GeneralResponse {
 	return GeneralResponse{
 		Status:  StatusSuccess,
 		Message: msg,
+	}
+}
+
+func GeneralData(data interface{}) GeneralDataResponse {
+	return GeneralDataResponse{
+		Status: StatusSuccess,
+		Data:   data,
 	}
 }
 
