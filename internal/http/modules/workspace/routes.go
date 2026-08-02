@@ -9,5 +9,6 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler, auth func(http.Handler) http
 
 	// POST /api/v1/workspaces  (protected)
 	mux.Handle("POST "+prefixV1, auth(http.HandlerFunc(h.Create)))
+	// GET /api/v1/workspaces  (protected)
 	mux.Handle("GET "+prefixV1, auth(http.HandlerFunc(h.Get)))
 }

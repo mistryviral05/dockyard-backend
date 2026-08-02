@@ -14,7 +14,7 @@ type HTTPServer struct {
 }
 
 type Clerk struct {
-	SecretKey string `yaml:"secret_key" env-required:"true"`
+	SecretKey     string `yaml:"secret_key" env-required:"true"`
 	WebhookSecret string `yaml:"webhook_secret" env-required:"true"`
 }
 
@@ -30,11 +30,22 @@ type Database struct {
 	ConnMaxLifetime time.Duration `yaml:"conn_max_lifetime" env:"DB_CONN_MAX_LIFETIME" env-default:"5m"`
 }
 
+type Github struct {
+	AppId          string `yaml:"app_id" env-required:"true"`
+	AppSlug        string `yaml:"app_slug" env-required:"true"`
+	ClientId      string `yaml:"client_id" env-required:"true"`
+	ClientSecret   string `yaml:"client_secret" env-required:"true"`
+	PrivateKeyPath string `yaml:"private_key_path" env-required:"true"`
+	WebhookSecret  string `yaml:"webhook_secret" env-required:"true"`
+
+}
+
 type Config struct {
 	Env        string `yaml:"env" env-required:"true" env-default:"production"`
 	HTTPServer `yaml:"http_server"`
 	Clerk      `yaml:"clerk"`
 	Database   `yaml:"database"`
+	Github     `yaml:"github"`
 }
 
 func MustLoad() *Config {
