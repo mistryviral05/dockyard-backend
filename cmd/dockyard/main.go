@@ -55,9 +55,11 @@ func main() {
 	}
 	r := router.New(modules)
 
+	handler := middleware.RequestLogger(logger)(middleware.Recover(logger)(r))
+
 	server := http.Server{
 		Addr:    cfg.Addr,
-		Handler: middleware.Recover(logger)(r),
+		Handler: handler,
 	}
 	//start server
 	done := make(chan os.Signal, 1)
