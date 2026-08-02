@@ -16,11 +16,12 @@ type Service struct {
 	repo   Repository
 }
 
-func NewService(db *sql.DB, cfg *config.Config, repo Repository) *Service {
+func NewService(db *sql.DB, cfg *config.Config, repo Repository, signer *signer.Signer) *Service {
 	return &Service{
-		db:   db,
-		cfg:  cfg,
-		repo: repo,
+		db:     db,
+		cfg:    cfg,
+		signer: signer,
+		repo:   repo,
 	}
 }
 

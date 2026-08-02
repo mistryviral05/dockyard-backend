@@ -33,12 +33,11 @@ type Database struct {
 type Github struct {
 	AppId          string `yaml:"app_id" env-required:"true"`
 	AppSlug        string `yaml:"app_slug" env-required:"true"`
-	ClientId      string `yaml:"client_id" env-required:"true"`
+	ClientId       string `yaml:"client_id" env-required:"true"`
 	ClientSecret   string `yaml:"client_secret" env-required:"true"`
 	PrivateKeyPath string `yaml:"private_key_path" env-required:"true"`
 	WebhookSecret  string `yaml:"webhook_secret" env-required:"true"`
-	StateSecret     string `yaml:"state_secret" env-required:"true"`
-
+	StateSecret    string `yaml:"state_secret" env-required:"true"`
 }
 
 type Config struct {
