@@ -11,7 +11,7 @@ import (
 func New(db *sql.DB, cfg *config.Config, logger *slog.Logger) *Handler {
 	sign := signer.New(cfg.Github.StateSecret)
 	repo := NewRepository(db)
-	service := NewService(db, cfg, repo, sign)
+	service := NewService(db, cfg, repo, sign,logger)
 	handler := NewHandler(service, logger)
 	return handler
 }
