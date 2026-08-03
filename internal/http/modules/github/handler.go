@@ -25,6 +25,21 @@ func NewHandler(service *Service, logger *slog.Logger) *Handler {
 	}
 }
 
+func (h *Handler) GetInstallations(w http.ResponseWriter, r *http.Request) {
+
+	userID, _ := middleware.ClerkIDFromContext(r.Context())
+
+	installations, err := h.service.GetInstallations(r.Context(), userID)
+	if err != nil {
+		h.logger.Error("failed to get installations", slog.String("error", err.Error()))
+		response.InternalError(w, "failed to get installations")
+		return
+	}
+
+	response.WriteJson(w, http.StatusOK, response.GeneralData(installations))
+
+}
+
 func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	// currently general data logs
 	var payload map[string]interface{}
