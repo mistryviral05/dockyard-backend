@@ -41,6 +41,10 @@ type StateClaims struct {
 	ClerkId string `json:"clerk_id"`
 }
 
+func (s *Service) GetInstallations(ctx context.Context, clerkId string) ([]InstallationDto, error) {
+	return s.repo.GetInstallations(ctx, clerkId)
+}
+
 func (s *Service) CreateInstallation(ctx context.Context, p ConnectRequest) error {
 	// state verify
 	var stateClaims StateClaims
