@@ -3,6 +3,7 @@ package github
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -22,6 +23,26 @@ func NewHandler(service *Service, logger *slog.Logger) *Handler {
 		service: service,
 		logger:  logger,
 	}
+}
+
+func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
+	// currently general data logs
+	var payload map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		if errors.Is(err, io.EOF) {
+			response.BadRequest(w, "request body cannot be empty")
+			return
+		}
+		h.logger.Error("failed to decode request body", slog.String("error", err.Error()))
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+
+	pretty, _ := json.MarshalIndent(payload, "", "  ")
+	fmt.Println(string(pretty))
+	h.logger.Info("webhook received", slog.String("event", r.Header.Get("x-github-event")))
+	h.logger.Info("webhook received", slog.String("signature", r.Header.Get("x-hub-signature-256")))
+	response.WriteJson(w, http.StatusAccepted, "Accepted")
 }
 
 func (h *Handler) CreateInstallation(w http.ResponseWriter, r *http.Request) {
