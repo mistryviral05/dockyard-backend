@@ -19,3 +19,10 @@ type InstallationDto struct {
 	Id           string `json:"id"`
 	AccountLogin string `json:"account_login"`
 }
+type RepositoryDto struct {
+	RepoId  string `json:"repo_id"`
+	RepoName string `json:"repo_name"`
+	RepoFullName string `json:"repo_full_name"`
+	RepoUrl string `json:"repo_url"`
+	IsPrivate bool   `json:"is_private"`
+}

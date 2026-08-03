@@ -41,7 +41,7 @@ type StateClaims struct {
 	ClerkId string `json:"clerk_id"`
 }
 
-func (s *Service) GetRepositories(ctx context.Context, instRowId, clerkId string) ([]*gogithub.Repository, error) {
+func (s *Service) GetRepositories(ctx context.Context, instRowId, clerkId string) ([]RepositoryDto, error) {
 	installationIdStr, err := s.repo.GetInstallationId(ctx, instRowId, clerkId)
 	if err != nil {
 		return nil, err
@@ -63,14 +63,22 @@ func (s *Service) GetRepositories(ctx context.Context, instRowId, clerkId string
 	}
 	client := gogithub.NewClient(&http.Client{Transport: itr})
 
-	repos := []*gogithub.Repository{}
+	repos := []RepositoryDto{}
 	opt := &gogithub.ListOptions{PerPage: 100}
 	for {
 		list, resp, err := client.Apps.ListRepos(ctx, opt)
 		if err != nil {
 			return nil, err
 		}
-		repos = append(repos, list.Repositories...)
+		for _, repo := range list.Repositories {
+			repos = append(repos, RepositoryDto{
+				RepoId:       strconv.Itoa(int(repo.GetID())),
+				RepoName:     repo.GetName(),
+				RepoFullName: repo.GetFullName(),
+				RepoUrl:      repo.GetHTMLURL(),
+				IsPrivate:    repo.GetPrivate(),
+			})
+		}
 		if resp.NextPage == 0 {
 			break
 		}
