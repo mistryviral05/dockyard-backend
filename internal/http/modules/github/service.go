@@ -75,7 +75,7 @@ func (s *Service) GetRepositories(ctx context.Context, instRowId, clerkId string
 				RepoId:       strconv.Itoa(int(repo.GetID())),
 				RepoName:     repo.GetName(),
 				RepoFullName: repo.GetFullName(),
-				RepoUrl:      repo.GetHTMLURL(),
+				RepoUrl:      repo.GetCloneURL(),
 				IsPrivate:    repo.GetPrivate(),
 			})
 		}
