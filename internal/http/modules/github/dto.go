@@ -14,3 +14,8 @@ type ConnectDto struct {
 	RepositorySelection string
 	Permissions         string
 }
+
+type InstallationDto struct {
+	Id           string `json:"id"`
+	AccountLogin string `json:"account_login"`
+}

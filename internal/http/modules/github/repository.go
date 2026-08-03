@@ -12,6 +12,7 @@ import (
 type Repository interface {
 	WithTx(db postgres.DBTX) Repository // rebinds the repo onto a transaction
 	CreateInstallation(ctx context.Context, p ConnectDto) (string, error)
+	GetInstallations(ctx context.Context, clerkId string) ([]InstallationDto, error)
 }
 
 type repository struct {
@@ -26,6 +27,36 @@ func (r *repository) WithTx(db postgres.DBTX) Repository {
 
 func NewRepository(db postgres.DBTX) Repository {
 	return &repository{db: db}
+}
+
+func (r *repository) GetInstallations(ctx context.Context, clerkId string) ([]InstallationDto, error) {
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT gi.id,gi.account_login 
+		FROM github_installations gi 
+		JOIN users u ON gi.user_id = u.id 
+		WHERE u.clerk_id = $1 
+		ORDER BY gi.created_at DESC
+	`, clerkId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	installations := []InstallationDto{}
+	for rows.Next() {
+		var installation InstallationDto
+		if err := rows.Scan(&installation.Id, &installation.AccountLogin); err != nil {
+			return nil, err
+		}
+		installations = append(installations, installation)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return installations, nil
 }
 
 func (r *repository) CreateInstallation(ctx context.Context, p ConnectDto) (string, error) {
