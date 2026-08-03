@@ -41,6 +41,45 @@ type StateClaims struct {
 	ClerkId string `json:"clerk_id"`
 }
 
+func (s *Service) GetRepositories(ctx context.Context, instRowId, clerkId string) ([]*gogithub.Repository, error) {
+	installationIdStr, err := s.repo.GetInstallationId(ctx, instRowId, clerkId)
+	if err != nil {
+		return nil, err
+	}
+
+	installationId, err := strconv.ParseInt(installationIdStr, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	appId, err := strconv.ParseInt(s.cfg.Github.AppId, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	itr, err := ghinstallation.NewKeyFromFile(http.DefaultTransport, appId, installationId, s.cfg.Github.PrivateKeyPath)
+	if err != nil {
+		return nil, err
+	}
+	client := gogithub.NewClient(&http.Client{Transport: itr})
+
+	repos := []*gogithub.Repository{}
+	opt := &gogithub.ListOptions{PerPage: 100}
+	for {
+		list, resp, err := client.Apps.ListRepos(ctx, opt)
+		if err != nil {
+			return nil, err
+		}
+		repos = append(repos, list.Repositories...)
+		if resp.NextPage == 0 {
+			break
+		}
+		opt.Page = resp.NextPage
+	}
+
+	return repos, nil
+}
+
 func (s *Service) GetInstallations(ctx context.Context, clerkId string) ([]InstallationDto, error) {
 	return s.repo.GetInstallations(ctx, clerkId)
 }

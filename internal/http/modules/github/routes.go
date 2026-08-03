@@ -9,5 +9,6 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler, auth func(http.Handler) http
 	mux.Handle("POST "+prefixV1+"/webhook", http.HandlerFunc(h.HandleWebhook))
 	mux.Handle("POST "+prefixV1+"/installations", auth(http.HandlerFunc(h.CreateInstallation)))
 	mux.Handle("GET "+prefixV1+"/installations", auth(http.HandlerFunc(h.GetInstallations)))
+	mux.Handle("GET "+prefixV1+"/installations/{id}/repositories", auth(http.HandlerFunc(h.GetRepositories)))
 	mux.Handle("GET "+prefixV1+"/install-url", auth(http.HandlerFunc(h.GetInstallationLink)))
 }

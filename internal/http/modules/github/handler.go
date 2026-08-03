@@ -25,6 +25,30 @@ func NewHandler(service *Service, logger *slog.Logger) *Handler {
 	}
 }
 
+func (h *Handler) GetRepositories(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.ClerkIDFromContext(r.Context())
+	instRowId := r.PathValue("id")
+
+	if instRowId == "" {
+		response.BadRequest(w, "missing installation id")
+		return
+	}
+	repositories, err := h.service.GetRepositories(r.Context(), instRowId, userID)
+	if err != nil {
+		if errors.Is(err, ErrInstallationNotFound) {
+			h.logger.Error("failed to get repositories", slog.String("error", err.Error()))
+			response.NotFound(w, "installation not found")
+			return
+		}
+
+		h.logger.Error("failed to get repositories", slog.String("error", err.Error()))
+		response.InternalError(w, "failed to get repositories")
+		return
+	}
+
+	response.WriteJson(w, http.StatusOK, response.GeneralData(repositories))
+}
+
 func (h *Handler) GetInstallations(w http.ResponseWriter, r *http.Request) {
 
 	userID, _ := middleware.ClerkIDFromContext(r.Context())

@@ -13,6 +13,7 @@ type Repository interface {
 	WithTx(db postgres.DBTX) Repository // rebinds the repo onto a transaction
 	CreateInstallation(ctx context.Context, p ConnectDto) (string, error)
 	GetInstallations(ctx context.Context, clerkId string) ([]InstallationDto, error)
+	GetInstallationId(ctx context.Context, instRowId, clerkId string) (string, error)
 }
 
 type repository struct {
@@ -20,6 +21,7 @@ type repository struct {
 }
 
 var ErrUserNotFound = errors.New("user not found")
+var ErrInstallationNotFound = errors.New("installation not found")
 
 func (r *repository) WithTx(db postgres.DBTX) Repository {
 	return &repository{db: db}
@@ -27,6 +29,24 @@ func (r *repository) WithTx(db postgres.DBTX) Repository {
 
 func NewRepository(db postgres.DBTX) Repository {
 	return &repository{db: db}
+}
+
+func (r *repository) GetInstallationId(ctx context.Context, instRowId, clerkId string) (string, error) {
+	var installationId string
+	err := r.db.QueryRowContext(ctx, `
+		SELECT gi.installation_id 
+		FROM github_installations gi 
+		JOIN users u ON gi.user_id = u.id
+		WHERE gi.id = $1 AND u.clerk_id = $2
+	`, instRowId, clerkId).Scan(&installationId)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrInstallationNotFound // not found OR not owned by this user
+	}
+	if err != nil {
+		return "", err
+	}
+	return installationId, nil
 }
 
 func (r *repository) GetInstallations(ctx context.Context, clerkId string) ([]InstallationDto, error) {
