@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -75,12 +76,25 @@ func (s *Service) CreateInstallation(ctx context.Context, p ConnectRequest) erro
 		return err
 	}
 
+	// parsing permsions in the jsonb
+	permsJSON, err := json.Marshal(inst.GetPermissions())
+	if err != nil {
+		s.logger.Error("faild to parse permisions into the json")
+		return err
+	}
+
+	// guard if the json is empty
+	if len(permsJSON) == 0 || string(permsJSON) == "null" {
+		permsJSON = []byte("{}")
+	}
+
 	_, err = s.repo.CreateInstallation(ctx, ConnectDto{
 		ClerkId:             p.ClerkId,
 		InstallationId:      p.InstallationId,
 		AccountLogin:        inst.GetAccount().GetLogin(),
 		AccountType:         inst.GetAccount().GetType(),
 		RepositorySelection: inst.GetRepositorySelection(),
+		Permissions:         string(permsJSON),
 	})
 
 	return err
@@ -90,7 +104,7 @@ func (s *Service) CreateInstallationLink(clerkId string) (string, error) {
 	claims := StateClaims{
 		ClerkId: clerkId,
 	}
-	token, err := s.signer.Sign(claims, time.Now().Add(10*time.Minute))
+	token, err := s.signer.Sign(claims, time.Now().Add(60*time.Minute))
 	if err != nil {
 		return "", err
 	}

@@ -32,17 +32,18 @@ func (r *repository) CreateInstallation(ctx context.Context, p ConnectDto) (stri
 	rowId := id.InstallationID()
 	var returnedId string
 	err := r.db.QueryRowContext(ctx, `
-		INSERT INTO github_installations (id,user_id,installation_id,account_login,account_type,repository_selection)
-		SELECT $1,u.id,$3,$4,$5,$6
+		INSERT INTO github_installations (id,user_id,installation_id,account_login,account_type,repository_selection,permissions)
+		SELECT $1,u.id,$3,$4,$5,$6,$7::jsonb
 		FROM users u
 		WHERE u.clerk_id = $2
 		ON CONFLICT (installation_id) DO UPDATE
 			SET account_login        = EXCLUDED.account_login,
 			    account_type         = EXCLUDED.account_type,
 			    repository_selection = EXCLUDED.repository_selection,
+				permissions           = EXCLUDED.permissions,
 			    updated_at           = now()
 		RETURNING id
-	`, rowId, p.ClerkId, p.InstallationId, p.AccountLogin, p.AccountType, p.RepositorySelection).Scan(&returnedId)
+	`, rowId, p.ClerkId, p.InstallationId, p.AccountLogin, p.AccountType, p.RepositorySelection, p.Permissions).Scan(&returnedId)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", ErrUserNotFound

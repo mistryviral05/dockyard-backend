@@ -12,4 +12,5 @@ type ConnectDto struct {
 	AccountLogin        string
 	AccountType         string
 	RepositorySelection string
+	Permissions         string
 }

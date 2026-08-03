@@ -32,7 +32,7 @@ Authorization: Bearer {{token}}
 
 
 ### 
-GET {{base}}/github/installations
+GET {{base}}/github/install-url
 Content-Type: application/json
 Authorization: Bearer {{token}}
 ###
@@ -42,8 +42,8 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-  "installation_id": "150780245",
-  "state" : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGVya19pZCI6InVzZXJfM0hDenY3UkI1Mmx5M2ViUW5IMGhVRWhYZm1MIiwiZXhwIjoxNzg1Njk0MDIyLCJpYXQiOjE3ODU2OTM0MjJ9.eBoMkJjSkBQO8XMcyS5-2oT1EvVkfGzcEs1FGbONLqQ"
+  "installation_id": "150928919",
+  "state" : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGVya19pZCI6InVzZXJfM0hDenY3UkI1Mmx5M2ViUW5IMGhVRWhYZm1MIiwiZXhwIjoxNzg1NzYwMTQ3LCJpYXQiOjE3ODU3NTY1NDd9.CgQt3B0m5uMPVGzwhdKibE7KUOSm8BlUXBlP_bgc2iY"
 }
 
 ###
