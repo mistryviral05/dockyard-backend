@@ -12,6 +12,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/lmittmann/tint v1.2.0
 	github.com/nrednav/cuid2 v1.1.0
+	github.com/rs/cors v1.11.1
 	github.com/svix/svix-webhooks v1.99.1
 )
 

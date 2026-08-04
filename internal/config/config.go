@@ -13,6 +13,10 @@ type HTTPServer struct {
 	Addr string `yaml:"address" env-required:"true" env-default:":8080"`
 }
 
+type CORS struct {
+	AllowedOrigins []string `yaml:"allowed_origins" env-required:"true"`
+}
+
 type Clerk struct {
 	SecretKey     string `yaml:"secret_key" env-required:"true"`
 	WebhookSecret string `yaml:"webhook_secret" env-required:"true"`
@@ -43,6 +47,7 @@ type Github struct {
 type Config struct {
 	Env        string `yaml:"env" env-required:"true" env-default:"production"`
 	HTTPServer `yaml:"http_server"`
+	CORS       `yaml:"cors"`
 	Clerk      `yaml:"clerk"`
 	Database   `yaml:"database"`
 	Github     `yaml:"github"`

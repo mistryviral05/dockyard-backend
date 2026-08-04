@@ -55,7 +55,7 @@ func main() {
 	}
 	r := router.New(modules)
 
-	handler := middleware.RequestLogger(logger)(middleware.Recover(logger)(r))
+	handler := middleware.CORS(cfg.CORS.AllowedOrigins)(middleware.RequestLogger(logger)(middleware.Recover(logger)(r)))
 
 	server := http.Server{
 		Addr:    cfg.Addr,
