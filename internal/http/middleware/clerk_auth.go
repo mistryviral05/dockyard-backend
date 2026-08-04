@@ -22,9 +22,7 @@ func RequireAuth(logger *slog.Logger) func(http.Handler) http.Handler {
 		authMiddleware := clerkhttp.WithHeaderAuthorization(
 			clerkhttp.AuthorizationFailureHandler(
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					logger.Error("clerk token rejected",
-						slog.String("authorization", r.Header.Get("Authorization")),
-					)
+					logger.Error("clerk token rejected")
 					response.Unauthorized(w, "invalid or expired token")
 				}),
 			),
