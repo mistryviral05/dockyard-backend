@@ -3,7 +3,9 @@ package workspace
 import (
 	"context"
 	"errors"
+	"fmt"
 
+	"github.com/lib/pq"
 	postgres "github.com/mistryviral05/dockyard/internal/http/database"
 	"github.com/mistryviral05/dockyard/internal/http/utils/id"
 )
@@ -37,8 +39,14 @@ func (r *repository) Create(ctx context.Context, dto *CreateWorkspaceDto) (strin
 		SELECT $1, u.id, $3, $4
 		FROM users u
 		WHERE u.clerk_id = $2
-	`, wsID, dto.ClerkId, dto.Name, dto.Slug)
+	`, wsID, dto.ClerkId, dto.Name, fmt.Sprintf("%s-%s", dto.Slug, wsID))
+	var pqErr *pq.Error
 	if err != nil {
+		if errors.As(err, &pqErr) {
+			if pqErr.Code == "23505" && pqErr.Constraint == "uq_workspaces_wsp_slug" {
+				return "", errors.New("workspace slug already exists")
+			}
+		}
 		return "", err
 	}
 
@@ -61,7 +69,7 @@ func (r *repository) CreateDefault(ctx context.Context, userId string) (string, 
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO workspaces (id, user_id, wsp_name, wsp_slug)
 		VALUES ($1, $2, $3, $4)
-	`, wsId, userId, "Personal Workspace", "personal-workspace")
+	`, wsId, userId, "Personal Workspace", fmt.Sprintf("personal-workspace-%s", wsId))
 	if err != nil {
 		return "", err
 	}
