@@ -4,9 +4,9 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 
-	"github.com/clerk/clerk-sdk-go/v2"
-	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
+	"github.com/clerk/clerk-sdk-go/v2/jwt"
 	"github.com/mistryviral05/dockyard/internal/http/utils/response"
 )
 
@@ -14,34 +14,59 @@ type ctxKey string
 
 const clerkIDKey ctxKey = "clerk_id"
 
-// RequireAuth verifies the Clerk session token (Authorization: Bearer <token>)
-// and stores the Clerk user id (JWT subject) in the request context.
-// No database access.
 func RequireAuth(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		authMiddleware := clerkhttp.WithHeaderAuthorization(
-			clerkhttp.AuthorizationFailureHandler(
-				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					logger.Error("clerk token rejected")
-					response.Unauthorized(w, "invalid or expired token")
-				}),
-			),
-		)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		return authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			claims, ok := clerk.SessionClaimsFromContext(r.Context())
-			if !ok || claims.Subject == "" {
-				response.Unauthorized(w, "You are not authorized to access this resource")
+			auth := r.Header.Get("Authorization")
+			if !strings.HasPrefix(auth, "Bearer ") {
+				response.Unauthorized(w, "missing bearer token")
 				return
 			}
 
+			token := strings.TrimPrefix(auth, "Bearer ")
+
+			// Decode token to get KID
+			decoded, err := jwt.Decode(r.Context(), &jwt.DecodeParams{
+				Token: token,
+			})
+			if err != nil {
+				logger.Error("decode failed", slog.Any("err", err))
+				response.Unauthorized(w, "invalid token")
+				return
+			}
+
+			// Fetch JWK
+			jwk, err := jwt.GetJSONWebKey(r.Context(), &jwt.GetJSONWebKeyParams{
+				KeyID: decoded.KeyID,
+			})
+			if err != nil {
+				logger.Error("jwk fetch failed", slog.Any("err", err))
+				response.Unauthorized(w, "invalid token")
+				return
+			}
+
+			// Verify
+			claims, err := jwt.Verify(r.Context(), &jwt.VerifyParams{
+				Token: token,
+				JWK:   jwk,
+			})
+			if err != nil {
+				logger.Error("verify failed", slog.Any("err", err))
+				response.Unauthorized(w, "invalid token")
+				return
+			}
+
+			logger.Info("verified",
+				slog.String("sub", claims.Subject),
+			)
+
 			ctx := context.WithValue(r.Context(), clerkIDKey, claims.Subject)
 			next.ServeHTTP(w, r.WithContext(ctx))
-		}))
+		})
 	}
 }
 
-// ClerkIDFromContext returns the authenticated Clerk user id set by RequireAuth.
 func ClerkIDFromContext(ctx context.Context) (string, bool) {
 	id, ok := ctx.Value(clerkIDKey).(string)
 	return id, ok
