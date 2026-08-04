@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/clerk/clerk-sdk-go/v2/jwt"
 	"github.com/mistryviral05/dockyard/internal/http/utils/response"
@@ -48,8 +49,9 @@ func RequireAuth(logger *slog.Logger) func(http.Handler) http.Handler {
 
 			// Verify
 			claims, err := jwt.Verify(r.Context(), &jwt.VerifyParams{
-				Token: token,
-				JWK:   jwk,
+				Token:  token,
+				JWK:    jwk,
+				Leeway: 10 * time.Second,
 			})
 			if err != nil {
 				logger.Error("verify failed", slog.Any("err", err))
