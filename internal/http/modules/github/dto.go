@@ -1,5 +1,7 @@
 package github
 
+import "time"
+
 type ConnectRequest struct {
 	InstallationId string `json:"installation_id" validate:"required"`
 	State          string `json:"state" validate:"required"`
@@ -20,9 +22,10 @@ type InstallationDto struct {
 	AccountLogin string `json:"account_login"`
 }
 type RepositoryDto struct {
-	RepoId  string `json:"repo_id"`
-	RepoName string `json:"repo_name"`
-	RepoFullName string `json:"repo_full_name"`
-	RepoUrl string `json:"repo_url"`
-	IsPrivate bool   `json:"is_private"`
+	RepoId        string    `json:"repo_id"`
+	RepoName      string    `json:"repo_name"`
+	RepoFullName  string    `json:"repo_full_name"`
+	RepoUrl       string    `json:"repo_url"`
+	IsPrivate     bool      `json:"is_private"`
+	LastUpdatedAt time.Time `json:"last_updated_at"`
 }

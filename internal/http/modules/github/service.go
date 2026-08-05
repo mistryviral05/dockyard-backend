@@ -72,11 +72,12 @@ func (s *Service) GetRepositories(ctx context.Context, instRowId, clerkId string
 		}
 		for _, repo := range list.Repositories {
 			repos = append(repos, RepositoryDto{
-				RepoId:       strconv.Itoa(int(repo.GetID())),
-				RepoName:     repo.GetName(),
-				RepoFullName: repo.GetFullName(),
-				RepoUrl:      repo.GetCloneURL(),
-				IsPrivate:    repo.GetPrivate(),
+				RepoId:        strconv.Itoa(int(repo.GetID())),
+				RepoName:      repo.GetName(),
+				RepoFullName:  repo.GetFullName(),
+				RepoUrl:       repo.GetCloneURL(),
+				IsPrivate:     repo.GetPrivate(),
+				LastUpdatedAt: repo.UpdatedAt.Time,
 			})
 		}
 		if resp.NextPage == 0 {
