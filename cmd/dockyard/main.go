@@ -58,8 +58,11 @@ func main() {
 	handler := middleware.CORS(cfg.CORS.AllowedOrigins)(middleware.RequestLogger(logger)(middleware.Recover(logger)(r)))
 
 	server := http.Server{
-		Addr:    cfg.Addr,
-		Handler: handler,
+		Addr:         cfg.Addr,
+		Handler:      handler,
+		ReadTimeout:  time.Duration(cfg.HTTPServer.ReadTimeout),
+		WriteTimeout: time.Duration(cfg.HTTPServer.WriteTimeout),
+		IdleTimeout:  time.Duration(cfg.HTTPServer.IdleTimeout),
 	}
 	//start server
 	done := make(chan os.Signal, 1)

@@ -11,6 +11,9 @@ import (
 
 type HTTPServer struct {
 	Addr string `yaml:"address" env-required:"true" env-default:":8080"`
+	ReadTimeout  time.Duration `yaml:"read_timeout" env:"HTTP_READ_TIMEOUT" env-default:"10s"`
+	WriteTimeout time.Duration `yaml:"write_timeout" env:"HTTP_WRITE_TIMEOUT" env-default:"30s"`
+	IdleTimeout  time.Duration `yaml:"idle_timeout" env:"HTTP_IDLE_TIMEOUT" env-default:"60s"`
 }
 
 type CORS struct {
