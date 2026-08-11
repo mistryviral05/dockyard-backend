@@ -11,6 +11,7 @@ type Agent struct {
 	AgentName sql.NullString
 	Port      string
 	Status    string
+	Subdomain sql.NullString
 	TokenExp  sql.NullTime
 	CreatedAt time.Time
 }

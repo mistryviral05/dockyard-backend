@@ -25,7 +25,7 @@ func NewHandler(service *Service, logger *slog.Logger) *Handler {
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	// set by middleware.RequireAuth
+	
 	clerkID, ok := middleware.ClerkIDFromContext(r.Context())
 	if !ok || clerkID == "" {
 		response.Unauthorized(w, "unauthorized")
@@ -73,4 +73,25 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.Info("agent created", slog.String("agent_id", res.Id), slog.String("clerk_id", clerkID))
 	response.WriteJson(w, http.StatusCreated, response.GeneralData(res))
+}
+
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+
+	clerkID, ok := middleware.ClerkIDFromContext(r.Context())
+	if !ok || clerkID == "" {
+		response.Unauthorized(w, "unauthorized")
+		return
+	}
+
+	agents, err := h.service.Get(r.Context(), clerkID)
+	if err != nil {
+		h.logger.Error("failed to get agents",
+			slog.String("clerk_id", clerkID),
+			slog.String("error", err.Error()),
+		)
+		response.InternalError(w, "failed to get agents, please try again")
+		return
+	}
+
+	response.WriteJson(w, http.StatusOK, response.GeneralData(agents))
 }

@@ -28,3 +28,11 @@ type CreateAgentResponse struct {
 	TokenExpiresIn int64     `json:"token_expires_in"`
 	RunCommand     string    `json:"run_command"`
 }
+
+type AgentDto struct {
+	Id        string  `json:"id"`
+	Name      string  `json:"name"`
+	Status    string  `json:"status"`
+	Subdomain *string `json:"subdomain"`
+	Port      string  `json:"port"`
+}

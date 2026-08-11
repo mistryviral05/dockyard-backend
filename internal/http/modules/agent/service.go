@@ -63,3 +63,26 @@ func (s *Service) Create(ctx context.Context, clerkID, name, port string) (*Crea
 		RunCommand:     BuildRunCommand(plainToken, created.Port),
 	}, nil
 }
+
+func (s *Service) Get(ctx context.Context, clerkID string) ([]*AgentDto, error) {
+	agents, err := s.repo.GetByClerkId(ctx, clerkID)
+	if err != nil {
+		return nil, err
+	}
+
+	dtos := make([]*AgentDto, 0, len(agents))
+	for _, a := range agents {
+		dto := &AgentDto{
+			Id:     a.Id,
+			Name:   a.AgentName.String,
+			Status: a.Status,
+			Port:   a.Port,
+		}
+		if a.Subdomain.Valid {
+			dto.Subdomain = &a.Subdomain.String
+		}
+		dtos = append(dtos, dto)
+	}
+
+	return dtos, nil
+}

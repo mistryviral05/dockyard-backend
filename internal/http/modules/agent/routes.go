@@ -7,4 +7,5 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler, auth func(http.Handler) http
 	prefixV1 := base + "/v1" + prefix
 
 	mux.Handle("POST "+prefixV1, auth(http.HandlerFunc(h.Create)))
+	mux.Handle("GET "+prefixV1, auth(http.HandlerFunc(h.Get)))
 }

@@ -21,6 +21,7 @@ var (
 
 type Repository interface {
 	Create(ctx context.Context, dto *CreateAgentDto) (*Agent, error)
+	GetByClerkId(ctx context.Context, clerkID string) ([]*Agent, error)
 	WithTx(db postgres.DBTX) Repository
 }
 
@@ -68,4 +69,32 @@ func (r *repository) Create(ctx context.Context, dto *CreateAgentDto) (*Agent, e
 	}
 
 	return &a, nil
+}
+
+func (r *repository) GetByClerkId(ctx context.Context, clerkID string) ([]*Agent, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT a.id, a.agent_name, a.status, a.subdomain, a.port
+		FROM agents a
+		JOIN users u ON u.id = a.user_id
+		WHERE u.clerk_id = $1
+		ORDER BY a.created_at DESC
+	`, clerkID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	agents := []*Agent{}
+	for rows.Next() {
+		var a Agent
+		if err := rows.Scan(&a.Id, &a.AgentName, &a.Status, &a.Subdomain, &a.Port); err != nil {
+			return nil, err
+		}
+		agents = append(agents, &a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return agents, nil
 }
