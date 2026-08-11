@@ -42,3 +42,7 @@ func DeploymentID() string {
 func InstallationID() string {
 	return "installation_" + generate()
 }
+
+func RepositoryID() string {
+	return "repository_" + generate()
+}

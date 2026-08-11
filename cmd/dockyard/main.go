@@ -16,6 +16,7 @@ import (
 	"github.com/mistryviral05/dockyard/internal/http/middleware"
 	"github.com/mistryviral05/dockyard/internal/http/modules/agent"
 	"github.com/mistryviral05/dockyard/internal/http/modules/github"
+	"github.com/mistryviral05/dockyard/internal/http/modules/project"
 	"github.com/mistryviral05/dockyard/internal/http/modules/user"
 	"github.com/mistryviral05/dockyard/internal/http/modules/workspace"
 	"github.com/mistryviral05/dockyard/internal/http/router"
@@ -47,6 +48,7 @@ func main() {
 	userModule := user.New(db, logger, cfg, wsModule.Repo)
 	githubModule := github.New(db, cfg, logger)
 	agentModule := agent.New(db, logger)
+	projectModule := project.New(db, logger)
 	authMW := middleware.RequireAuth(logger)
 
 	modules := router.Modules{
@@ -54,8 +56,8 @@ func main() {
 		Workspace: wsModule.Handler,
 		Github:    githubModule,
 		Agent:     agentModule,
-
-		Auth:      authMW,
+		Project:   projectModule,
+		Auth: authMW,
 	}
 	r := router.New(modules)
 
