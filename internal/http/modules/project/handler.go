@@ -80,3 +80,31 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	)
 	response.WriteJson(w, http.StatusCreated, response.GeneralMessage("Project is created successfully"))
 }
+
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+
+	clerkID, ok := middleware.ClerkIDFromContext(r.Context())
+	if !ok || clerkID == "" {
+		response.Unauthorized(w, "unauthorized")
+		return
+	}
+
+	workspaceID := r.URL.Query().Get("workspace_id")
+	if workspaceID == "" {
+		response.BadRequest(w, "workspace_id is required")
+		return
+	}
+
+	projects, err := h.service.Get(r.Context(), clerkID, workspaceID)
+	if err != nil {
+		h.logger.Error("failed to get projects",
+			slog.String("clerk_id", clerkID),
+			slog.String("workspace_id", workspaceID),
+			slog.String("error", err.Error()),
+		)
+		response.InternalError(w, "failed to get projects, please try again")
+		return
+	}
+
+	response.WriteJson(w, http.StatusOK, response.GeneralData(projects))
+}

@@ -55,3 +55,26 @@ func (s *Service) Create(ctx context.Context, clerkID string, req *CreateProject
 
 	return tx.Commit()
 }
+
+func (s *Service) Get(ctx context.Context, clerkID, workspaceID string) ([]*ProjectDto, error) {
+	projects, err := s.repo.GetByClerkId(ctx, clerkID, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+
+	dtos := make([]*ProjectDto, 0, len(projects))
+	for _, p := range projects {
+		dto := &ProjectDto{
+			Id:       p.Id,
+			Name:     p.ProjectName.String,
+			Stack:    p.ProjectStack.String,
+			RepoName: p.RepoName.String,
+		}
+		if p.DeploymentStatus.Valid {
+			dto.DeploymentStatus = &p.DeploymentStatus.String
+		}
+		dtos = append(dtos, dto)
+	}
+
+	return dtos, nil
+}

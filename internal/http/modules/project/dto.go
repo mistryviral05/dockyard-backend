@@ -17,6 +17,14 @@ type RepositoryRequest struct {
 	IsPrivate    bool   `json:"is_private"`
 }
 
+type ProjectDto struct {
+	Id               string  `json:"id"`
+	Name             string  `json:"project_name"`
+	Stack            string  `json:"project_stack"`
+	RepoName         string  `json:"repo_name"`
+	DeploymentStatus *string `json:"deployment_status"`
+}
+
 type CreateProjectDto struct {
 	ClerkId     string
 	ProjectId   string

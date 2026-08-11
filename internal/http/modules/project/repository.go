@@ -18,6 +18,7 @@ var (
 type Repository interface {
 	Create(ctx context.Context, dto *CreateProjectDto) (string, error)
 	CreateRepository(ctx context.Context, dto *CreateRepositoryDto) error
+	GetByClerkId(ctx context.Context, clerkID, workspaceID string) ([]*Project, error)
 	WithTx(db postgres.DBTX) Repository
 }
 
@@ -54,6 +55,46 @@ func (r *repository) Create(ctx context.Context, dto *CreateProjectDto) (string,
 	}
 
 	return projectId, nil
+}
+
+// GetByClerkId lists the projects of one workspace owned by this clerk user,
+// with their repo name and the status of their most recent deployment
+// (null when never deployed).
+func (r *repository) GetByClerkId(ctx context.Context, clerkID, workspaceID string) ([]*Project, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT p.id, p.project_name, p.project_stack, r.repo_name, d.status
+		FROM projects p
+		JOIN workspaces w ON w.id = p.wsp_id
+		JOIN users u ON u.id = w.user_id
+		LEFT JOIN repositories r ON r.project_id = p.id
+		LEFT JOIN LATERAL (
+			SELECT dp.status
+			FROM deployments dp
+			WHERE dp.project_id = p.id
+			ORDER BY dp.created_at DESC
+			LIMIT 1
+		) d ON true
+		WHERE u.clerk_id = $1 AND w.id = $2
+		ORDER BY p.created_at DESC
+	`, clerkID, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	projects := []*Project{}
+	for rows.Next() {
+		var p Project
+		if err := rows.Scan(&p.Id, &p.ProjectName, &p.ProjectStack, &p.RepoName, &p.DeploymentStatus); err != nil {
+			return nil, err
+		}
+		projects = append(projects, &p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return projects, nil
 }
 
 // CreateRepository links the github repo to the project, resolving the
