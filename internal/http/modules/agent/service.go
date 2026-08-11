@@ -29,25 +29,14 @@ func (s *Service) Create(ctx context.Context, clerkID, name, port string) (*Crea
 	dto := &CreateAgentDto{
 		ClerkId:   clerkID,
 		AgentId:   id.AgentID(),
-		TokenId:   id.AgentID(),
 		Name:      name,
 		Port:      normalizePort(port),
 		TokenHash: tokenHash,
 		TokenExp:  time.Now().Add(registrationTokenTTL),
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	created, err := s.repo.Create(ctx, dto)
 	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-
-	created, err := s.repo.WithTx(tx).Create(ctx, dto)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 

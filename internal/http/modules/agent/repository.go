@@ -61,13 +61,6 @@ func (r *repository) Create(ctx context.Context, dto *CreateAgentDto) (*Agent, e
 		return nil, err
 	}
 
-	if _, err := r.db.ExecContext(ctx, `
-		INSERT INTO agent_tokens (id, agent_id, token, type, expires_at)
-		VALUES ($1, $2, $3, 'registration', $4)
-	`, dto.TokenId, a.Id, dto.TokenHash, dto.TokenExp); err != nil {
-		return nil, err
-	}
-
 	return &a, nil
 }
 

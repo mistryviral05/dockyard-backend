@@ -10,7 +10,6 @@ type CreateAgentRequest struct {
 type CreateAgentDto struct {
 	ClerkId   string
 	AgentId   string
-	TokenId   string
 	Name      string
 	Port      string
 	TokenHash string
