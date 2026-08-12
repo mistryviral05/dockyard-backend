@@ -64,7 +64,7 @@ func main() {
 	handler := middleware.CORS(cfg.CORS.AllowedOrigins)(middleware.RequestLogger(logger)(middleware.Recover(logger)(r)))
 
 	server := http.Server{
-		Addr:         cfg.Addr,
+		Addr:         cfg.HTTPServer.Addr,
 		Handler:      handler,
 		ReadTimeout:  time.Duration(cfg.HTTPServer.ReadTimeout),
 		WriteTimeout: time.Duration(cfg.HTTPServer.WriteTimeout),
@@ -75,7 +75,7 @@ func main() {
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		logger.Info("Server started",
-			slog.String("address", cfg.Addr),
+			slog.String("address", cfg.HTTPServer.Addr),
 		)
 		err := server.ListenAndServe()
 
