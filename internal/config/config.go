@@ -9,6 +9,13 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
+
+type Redis struct {
+	Addr     string `yaml:"addr" env-required:"true"`
+	Password string `yaml:"password" env-required:"true"`
+	DB       int    `yaml:"db" env-required:"true"`
+}
+
 type HTTPServer struct {
 	Addr string `yaml:"address" env-required:"true" env-default:":8080"`
 	ReadTimeout  time.Duration `yaml:"read_timeout" env:"HTTP_READ_TIMEOUT" env-default:"10s"`
@@ -54,6 +61,7 @@ type Config struct {
 	Clerk      `yaml:"clerk"`
 	Database   `yaml:"database"`
 	Github     `yaml:"github"`
+	Redis      `yaml:"redis"`
 }
 
 func MustLoad() *Config {
