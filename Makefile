@@ -16,6 +16,13 @@ start:
 run:
 	@go run ./cmd/$(APP)/main.go --config ./config/local.yaml
 
+run-worker:
+	@go run ./cmd/worker/main.go --config ./config/local.yaml
+
+# this is only for temporary testing of ping endpoint, not for production use
+run-ping:
+	@go run ./cmd/ping/main.go --config ./config/local.yaml
+
 # Create a new empty migration pair: make migrate-create name=add_something
 migrate-create:
 	@migrate create -ext sql -dir $(MIGRATIONS_DIR) -seq $(name)
@@ -40,4 +47,4 @@ migrate-version:
 migrate-force:
 	@migrate -path $(MIGRATIONS_DIR) -database "$(DB_URL)" force $(version)
 
-.PHONY: run migrate-create migrate-up migrate-down migrate-down-all migrate-version migrate-force
+.PHONY: run migrate-create migrate-up migrate-down migrate-down-all migrate-version migrate-force run-worker run-ping build start

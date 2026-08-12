@@ -41,6 +41,17 @@ services:
       nofile:
         soft: 65536
         hard: 65536
+  asynqmon:
+    image: hibiken/asynqmon
+    container_name: dockyard-asynqmon
+    ports:
+      - "8081:8080"
+    command:
+      - "--redis-addr=redis:6379"
+      - "--redis-password=${REDIS_PASSWORD:-dockyardlocal}"
+    depends_on:
+      - redis
+    profiles: ["dev"]
 
 volumes:
   dockyard_data:
