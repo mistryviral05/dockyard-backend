@@ -14,7 +14,7 @@ type Server struct {
 	logger *slog.Logger
 }
 
-func NewServer(cfg config.Redis, logger *slog.Logger, h *Handlers) *Server {
+func NewServer(cfg *config.Redis, logger *slog.Logger, h *Handlers) *Server {
 	srv := asynq.NewServer(
 		asynq.RedisClientOpt{
 			Addr:     cfg.Addr,

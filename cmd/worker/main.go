@@ -20,7 +20,7 @@ func main() {
 	// TODO : Connect the db
 
 	handlers := queue.NewHandlers(logger)
-	srv := queue.NewServer(cfg.Redis, logger, handlers)
+	srv := queue.NewServer(&cfg.Redis, logger, handlers)
 
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
