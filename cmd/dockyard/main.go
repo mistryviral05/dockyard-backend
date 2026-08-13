@@ -15,6 +15,7 @@ import (
 	postgres "github.com/mistryviral05/dockyard/internal/http/database"
 	"github.com/mistryviral05/dockyard/internal/http/middleware"
 	"github.com/mistryviral05/dockyard/internal/http/modules/agent"
+	"github.com/mistryviral05/dockyard/internal/http/modules/deployment"
 	"github.com/mistryviral05/dockyard/internal/http/modules/github"
 	"github.com/mistryviral05/dockyard/internal/http/modules/project"
 	"github.com/mistryviral05/dockyard/internal/http/modules/user"
@@ -49,6 +50,7 @@ func main() {
 	githubModule := github.New(db, cfg, logger)
 	agentModule := agent.New(db, logger)
 	projectModule := project.New(db, logger)
+	deploymentModule := deployment.New(db, logger)
 	authMW := middleware.RequireAuth(logger)
 
 	modules := router.Modules{
@@ -57,7 +59,8 @@ func main() {
 		Github:    githubModule,
 		Agent:     agentModule,
 		Project:   projectModule,
-		Auth: authMW,
+		Deployment: deploymentModule,
+		Auth:      authMW,
 	}
 	r := router.New(modules)
 

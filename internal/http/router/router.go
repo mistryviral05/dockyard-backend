@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/mistryviral05/dockyard/internal/http/modules/agent"
+	"github.com/mistryviral05/dockyard/internal/http/modules/deployment"
 	"github.com/mistryviral05/dockyard/internal/http/modules/github"
 	"github.com/mistryviral05/dockyard/internal/http/modules/project"
 	"github.com/mistryviral05/dockyard/internal/http/modules/user"
@@ -11,12 +12,13 @@ import (
 )
 
 type Modules struct {
-	User      *user.Handler
-	Workspace *workspace.Handler
-	Auth      func(http.Handler) http.Handler // clerk auth middleware
-	Github    *github.Handler
-	Agent     *agent.Handler
-	Project   *project.Handler
+	User       *user.Handler
+	Workspace  *workspace.Handler
+	Auth       func(http.Handler) http.Handler // clerk auth middleware
+	Github     *github.Handler
+	Agent      *agent.Handler
+	Project    *project.Handler
+	Deployment *deployment.Handler
 }
 
 func New(m Modules) http.Handler {
@@ -27,5 +29,6 @@ func New(m Modules) http.Handler {
 	github.RegisterRoutes(mux, m.Github, m.Auth, base)
 	agent.RegisterRoutes(mux, m.Agent, m.Auth, base)
 	project.RegisterRoutes(mux, m.Project, m.Auth, base)
+	deployment.RegisterRoutes(mux, m.Deployment, m.Auth, base)
 	return mux
 }
