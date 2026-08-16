@@ -22,6 +22,7 @@ import (
 	"github.com/mistryviral05/dockyard/internal/http/modules/workspace"
 	"github.com/mistryviral05/dockyard/internal/http/router"
 	"github.com/mistryviral05/dockyard/internal/logger"
+	"github.com/mistryviral05/dockyard/internal/queue"
 )
 
 func main() {
@@ -45,12 +46,18 @@ func main() {
 		slog.String("db", cfg.Database.Name),
 	)
 
+	queueClient := queue.NewClient(&cfg.Redis, logger)
+	defer queueClient.Close()
+	logger.Info("Queue connected",
+		slog.String("redis", cfg.Redis.Addr),
+	)
+
 	wsModule := workspace.New(db, logger)
 	userModule := user.New(db, logger, cfg, wsModule.Repo)
 	githubModule := github.New(db, cfg, logger)
 	agentModule := agent.New(db, logger)
 	projectModule := project.New(db, logger)
-	deploymentModule := deployment.New(db, logger)
+	deploymentModule := deployment.New(db, logger, queueClient)
 	authMW := middleware.RequireAuth(logger)
 
 	modules := router.Modules{
