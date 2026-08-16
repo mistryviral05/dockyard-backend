@@ -25,11 +25,12 @@ type Service struct {
 	queue  Enqueuer
 }
 
-func NewService(db *sql.DB, logger *slog.Logger, repo Repository) *Service {
+func NewService(db *sql.DB, logger *slog.Logger, repo Repository, queue Enqueuer) *Service {
 	return &Service{
 		db:     db,
 		logger: logger,
 		repo:   repo,
+		queue:  queue,
 	}
 }
 
@@ -84,4 +85,21 @@ func (s *Service) CreateManual(ctx context.Context, clerkId, projectId, branch s
 	}
 	return nil
 
+}
+
+func (s *Service) Get(ctx context.Context, clerkId, deploymentId string) (*Deployment, error) {
+	return s.repo.GetByID(ctx, deploymentId, clerkId)
+}
+
+// List gives a project's deployments, newest first.
+// An empty cursor means the first page.
+func (s *Service) List(ctx context.Context, clerkId, projectId, cursor string, limit int) ([]*Deployment, error) {
+	if limit <= 0 {
+		limit = defaultListLimit
+	}
+	if limit > maxListLimit {
+		limit = maxListLimit
+	}
+
+	return s.repo.ListByProject(ctx, projectId, clerkId, cursor, limit)
 }
