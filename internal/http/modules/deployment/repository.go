@@ -18,6 +18,11 @@ var updatableColumns = []string{
 	"error_message",
 }
 
+var (
+	ErrProjectNotFound    = errors.New("project not found")
+	ErrDeploymentNotFound = errors.New("deployment not found")
+)
+
 const (
 	ErrInvalidTransition = "invalid transition"
 )
@@ -89,4 +94,147 @@ func (r *repository) Transition(ctx context.Context, id, to string, extra map[st
 	}
 
 	return nil
+}
+
+// selectColumns har read query me same order rakhta hai taaki scanRow reuse ho sake.
+const selectColumns = `
+	d.id, d.project_id, d.agent_id, d.triggered_by, d.trigger_source,
+	d.commit_sha, d.commit_message, d.branch, d.status, d.image_tag,
+	d.container_id, d.error_message, d.started_at, d.completed_at,
+	d.created_at, d.updated_at`
+
+// ownershipJoin deployment ko clerk user tak jodta hai.
+// Har read query me lagana zaroori hai.
+const ownershipJoin = `
+	FROM deployments d
+	JOIN projects p   ON p.id = d.project_id
+	JOIN workspaces w ON w.id = p.wsp_id
+	JOIN users u      ON u.id = w.user_id`
+
+func (r *repository) Create(ctx context.Context, dto *CreateDeploymentDto) error {
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO deployments (
+			id, project_id, agent_id, triggered_by, trigger_source,
+			branch, commit_sha, commit_message, status
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+	`, dto.DeploymentId, dto.ProjectId, dto.AgentId, dto.TriggeredBy,
+		dto.TriggerSource, dto.Branch, dto.CommitSha, dto.CommitMessage)
+
+	return err
+}
+
+func (r *repository) ResolveProjectForUser(ctx context.Context, projectID, clerkID string) (*ProjectRef, error) {
+	var ref ProjectRef
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT p.id, w.user_id, p.default_branch, pa.agent_id
+		FROM projects p
+		JOIN workspaces w ON w.id = p.wsp_id
+		JOIN users u      ON u.id = w.user_id
+		LEFT JOIN project_agent pa ON pa.project_id = p.id
+		WHERE p.id = $1 AND u.clerk_id = $2
+		ORDER BY pa.created_at DESC
+		LIMIT 1
+	`, projectID, clerkID).Scan(&ref.ProjectId, &ref.UserId, &ref.DefaultBranch, &ref.AgentId)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, err
+	}
+
+	return &ref, nil
+}
+
+// HasActiveDeployment batata hai ki is project pe koi deployment abhi chal rahi hai.
+func (r *repository) HasActiveDeployment(ctx context.Context, projectID string) (bool, error) {
+	var exists bool
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM deployments
+			WHERE project_id = $1 AND status = ANY($2)
+		)
+	`, projectID, pq.Array(ActiveStatuses())).Scan(&exists)
+
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
+// GetByID ek deployment lautata hai, sirf tab jab wo is clerk user ka ho.
+func (r *repository) GetByID(ctx context.Context, id, clerkID string) (*Deployment, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT `+selectColumns+ownershipJoin+`
+		WHERE d.id = $1 AND u.clerk_id = $2
+	`, id, clerkID)
+
+	d, err := scanDeployment(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDeploymentNotFound
+		}
+		return nil, err
+	}
+
+	return d, nil
+}
+
+// ListByProject naye se purane order me deployments deta hai.
+// cursor khali ho toh pehla page. Keyset pagination hai, OFFSET nahi.
+func (r *repository) ListByProject(ctx context.Context, projectID, clerkID, cursor string, limit int) ([]*Deployment, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT `+selectColumns+ownershipJoin+`
+		WHERE d.project_id = $1
+		  AND u.clerk_id = $2
+		  AND ($3 = '' OR (d.created_at, d.id) < (
+				SELECT c.created_at, c.id FROM deployments c WHERE c.id = $3
+		  ))
+		ORDER BY d.created_at DESC, d.id DESC
+		LIMIT $4
+	`, projectID, clerkID, cursor, limit)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	deployments := []*Deployment{}
+	for rows.Next() {
+		d, err := scanDeployment(rows)
+		if err != nil {
+			return nil, err
+		}
+		deployments = append(deployments, d)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return deployments, nil
+}
+
+// scanner *sql.Row aur *sql.Rows dono ko cover karta hai.
+type scanner interface {
+	Scan(dest ...interface{}) error
+}
+
+func scanDeployment(s scanner) (*Deployment, error) {
+	var d Deployment
+
+	err := s.Scan(
+		&d.Id, &d.ProjectId, &d.AgentId, &d.TriggeredBy, &d.TriggerSource,
+		&d.CommitSha, &d.CommitMessage, &d.Branch, &d.Status, &d.ImageTag,
+		&d.ContainerId, &d.ErrorMessage, &d.StartedAt, &d.CompletedAt,
+		&d.CreatedAt, &d.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &d, nil
 }
