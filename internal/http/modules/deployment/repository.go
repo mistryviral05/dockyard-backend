@@ -28,6 +28,12 @@ const (
 )
 
 type Repository interface {
+	Create(ctx context.Context, dto *CreateDeploymentDto) error
+	Transition(ctx context.Context, id, to string, extra map[string]interface{}) error
+	ResolveProjectForUser(ctx context.Context, projectID, clerkID string) (*ProjectRef, error)
+	HasActiveDeployment(ctx context.Context, projectID string) (bool, error)
+	GetByID(ctx context.Context, id, clerkID string) (*Deployment, error)
+	ListByProject(ctx context.Context, projectID, clerkID, cursor string, limit int) ([]*Deployment, error)
 	WithTx(db postgres.DBTX) Repository
 }
 
@@ -96,15 +102,12 @@ func (r *repository) Transition(ctx context.Context, id, to string, extra map[st
 	return nil
 }
 
-// selectColumns har read query me same order rakhta hai taaki scanRow reuse ho sake.
 const selectColumns = `
 	d.id, d.project_id, d.agent_id, d.triggered_by, d.trigger_source,
 	d.commit_sha, d.commit_message, d.branch, d.status, d.image_tag,
 	d.container_id, d.error_message, d.started_at, d.completed_at,
 	d.created_at, d.updated_at`
 
-// ownershipJoin deployment ko clerk user tak jodta hai.
-// Har read query me lagana zaroori hai.
 const ownershipJoin = `
 	FROM deployments d
 	JOIN projects p   ON p.id = d.project_id
@@ -183,8 +186,6 @@ func (r *repository) GetByID(ctx context.Context, id, clerkID string) (*Deployme
 	return d, nil
 }
 
-// ListByProject naye se purane order me deployments deta hai.
-// cursor khali ho toh pehla page. Keyset pagination hai, OFFSET nahi.
 func (r *repository) ListByProject(ctx context.Context, projectID, clerkID, cursor string, limit int) ([]*Deployment, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT `+selectColumns+ownershipJoin+`
@@ -218,7 +219,6 @@ func (r *repository) ListByProject(ctx context.Context, projectID, clerkID, curs
 	return deployments, nil
 }
 
-// scanner *sql.Row aur *sql.Rows dono ko cover karta hai.
 type scanner interface {
 	Scan(dest ...interface{}) error
 }
