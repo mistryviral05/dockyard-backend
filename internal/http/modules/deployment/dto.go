@@ -1,13 +1,12 @@
 package deployment
 
-
 type CreateDeploymentDto struct {
 	DeploymentId  string
 	ProjectId     string
 	AgentId       string
-	TriggeredBy   interface{} // string ya nil (webhook pe user nahi hota)
+	TriggeredBy   *string
 	TriggerSource string
 	Branch        string
-	CommitSha     interface{}
-	CommitMessage interface{}
+	CommitSha     *string
+	CommitMessage *string
 }

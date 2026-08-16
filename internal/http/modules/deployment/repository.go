@@ -18,10 +18,7 @@ var updatableColumns = []string{
 	"error_message",
 }
 
-var (
-	ErrProjectNotFound    = errors.New("project not found")
-	ErrDeploymentNotFound = errors.New("deployment not found")
-)
+
 
 const (
 	ErrInvalidTransition = "invalid transition"
