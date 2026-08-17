@@ -27,3 +27,15 @@ func (h *Handlers) HandleDebugPing(ctx context.Context, t *asynq.Task) error {
 	h.logger.Info("pong", slog.String("message", p.Message))
 	return nil
 }
+
+func (h *Handlers) HandleEqueueBuild(ctx context.Context, t *asynq.Task) error {
+
+	var p DeployBuildPayload
+	if err := json.Unmarshal(t.Payload(),&p); err != nil {
+		return asynq.SkipRetry
+	}
+
+	h.logger.Info("deploy build", slog.String("deployment_id", p.DeploymentId))
+
+	return nil
+}
