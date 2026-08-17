@@ -8,6 +8,8 @@ import (
 	"syscall"
 
 	"github.com/mistryviral05/dockyard/internal/config"
+	postgres "github.com/mistryviral05/dockyard/internal/http/database"
+	"github.com/mistryviral05/dockyard/internal/http/modules/deployment"
 	"github.com/mistryviral05/dockyard/internal/logger"
 	"github.com/mistryviral05/dockyard/internal/queue"
 )
@@ -18,8 +20,18 @@ func main() {
 	logger := logger.New()
 
 	// TODO : Connect the db
-
-	handlers := queue.NewHandlers(logger)
+	db, err := postgres.New(cfg.Database)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+	logger.Info("Database connected",
+		slog.String("host", cfg.Database.Host),
+		slog.String("db", cfg.Database.Name),
+	)
+	deploymentRepository := deployment.NewRepository(db)
+	service := queue.NewService(deploymentRepository, logger)
+	handlers := queue.NewHandlers(logger, service)
 	srv := queue.NewServer(&cfg.Redis, logger, handlers)
 
 	done := make(chan os.Signal, 1)
