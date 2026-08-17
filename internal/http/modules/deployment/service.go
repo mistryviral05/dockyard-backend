@@ -72,17 +72,25 @@ func (s *Service) CreateManual(ctx context.Context, clerkId, projectId, branch s
 		TriggerSource: TriggerManual,
 		Branch:        branch,
 	}
-
-	if err := s.repo.Create(ctx, d); err != nil {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	repo := s.repo.WithTx(tx)
+	if err := repo.Create(ctx, d); err != nil {
+		return err
+	}
+	if err := repo.Transition(ctx, d.DeploymentId, StatusQueued, nil); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 	if err := s.queue.EnqueueBuild(ctx, d.DeploymentId); err != nil {
 		return err
 	}
 
-	if err := s.repo.Transition(ctx, d.DeploymentId, StatusQueued, nil); err != nil {
-		return err
-	}
 	return nil
 
 }

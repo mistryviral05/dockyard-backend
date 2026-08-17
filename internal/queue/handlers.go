@@ -20,7 +20,6 @@ func NewHandlers(logger *slog.Logger) *Handlers {
 func (h *Handlers) HandleDebugPing(ctx context.Context, t *asynq.Task) error {
 	var p DebugPingPayload
 	if err := json.Unmarshal(t.Payload(), &p); err != nil {
-		// payload hi kharab hai - retry se theek nahi hoga
 		return asynq.SkipRetry
 	}
 
