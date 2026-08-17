@@ -81,7 +81,7 @@ func (s *Service) CreateManual(ctx context.Context, clerkId, projectId, branch s
 	if err := repo.Create(ctx, d); err != nil {
 		return err
 	}
-	if err := repo.Transition(ctx, d.DeploymentId, StatusQueued, nil); err != nil {
+	if _, err := repo.Transition(ctx, d.DeploymentId, StatusQueued, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {

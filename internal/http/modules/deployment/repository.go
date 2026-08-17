@@ -26,7 +26,7 @@ const (
 
 type Repository interface {
 	Create(ctx context.Context, dto *CreateDeploymentDto) error
-	Transition(ctx context.Context, id, to string, extra map[string]interface{}) error
+	Transition(ctx context.Context, id, to string, extra map[string]interface{}) (bool, error)
 	ResolveProjectForUser(ctx context.Context, projectID, clerkID string) (*ProjectRef, error)
 	HasActiveDeployment(ctx context.Context, projectID string) (bool, error)
 	GetByID(ctx context.Context, id, clerkID string) (*Deployment, error)
@@ -48,12 +48,12 @@ func NewRepository(db postgres.DBTX) Repository {
 	}
 }
 
-func (r *repository) Transition(ctx context.Context, id, to string, extra map[string]interface{}) error {
+func (r *repository) Transition(ctx context.Context, id, to string, extra map[string]interface{}) (bool, error) {
 
 	from, ok := PredecessorsOf(to)
 
 	if !ok {
-		return errors.New(ErrInvalidTransition)
+		return false, errors.New(ErrInvalidTransition)
 	}
 
 	sets := []string{"status = $1", "updated_at = NOW()"}
@@ -90,13 +90,14 @@ func (r *repository) Transition(ctx context.Context, id, to string, extra map[st
 	err := r.db.QueryRowContext(ctx, q, args...).Scan(&returned)
 
 	if err != nil {
+		// 0 rows: status match nahi hui. Galti nahi, par hua bhi nahi.
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil
+			return false, nil
 		}
-		return fmt.Errorf("failed to transition deployment: %w", err)
+		return false, fmt.Errorf("failed to transition deployment: %w", err)
 	}
 
-	return nil
+	return true, nil
 }
 
 const selectColumns = `
