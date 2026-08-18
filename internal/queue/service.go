@@ -43,44 +43,12 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 
 	s.logger.Info("build started", slog.String("deployment_id", deploymentId))
 
-	// setup the github mint token and clone repo
-	buildCtx, err := s.repo.GetBuildContext(ctx, deploymentId)
-
-	token, err := s.ghClient.InstallationToken(ctx, buildCtx.InstallationId)
-	if err != nil {
-		s.logger.Error("failed to mint the installation token",
-			slog.String("deployment_id", deploymentId),
-			slog.String("error", err.Error()),
-		)
-		return s.markFailed(deploymentId, "could not reach github, reconnect the github app and try again")
-	}
-
-	commit, err := s.ghClient.LatestCommit(ctx, buildCtx.InstallationId, buildCtx.RepoFullName, buildCtx.Branch)
-
-	if err != nil {
-		s.logger.Error("failed to read the branch",
-			slog.String("deployment_id", deploymentId),
-			slog.String("branch", buildCtx.Branch),
-			slog.String("error", err.Error()),
-		)
-		return s.markFailed(deploymentId, "branch "+buildCtx.Branch+" was not found in the repository")
-	}
-
-	if err := s.repo.SetCommit(ctx, deploymentId, commit.Sha, commit.Message); err != nil {
-		return err
-	}
-
-	s.logger.Info("commit resolved",
-		slog.String("deployment_id", deploymentId),
-		slog.String("sha", commit.Sha),
-	)
-
-	buildDir, err := s.clone(ctx, buildCtx, token)
+	buildDir, err := s.prepareBuildSource(ctx, deploymentId)
 	if buildDir != "" {
 		defer os.RemoveAll(buildDir)
 	}
 	if err != nil {
-		return s.markFailed(deploymentId, "could not download the repository")
+		return err
 	}
 
 	if err := sleep(ctx, fakeBuildDuration); err != nil {
@@ -111,6 +79,45 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 
 	s.logger.Info("deployment is running", slog.String("deployment_id", deploymentId))
 	return nil
+}
+
+func (s *Service) prepareBuildSource(ctx context.Context, deploymentId string) (string, error) {
+	buildCtx, err := s.repo.GetBuildContext(ctx, deploymentId)
+
+	token, err := s.ghClient.InstallationToken(ctx, buildCtx.InstallationId)
+	if err != nil {
+		s.logger.Error("failed to mint the installation token",
+			slog.String("deployment_id", deploymentId),
+			slog.String("error", err.Error()),
+		)
+		return "", s.markFailed(deploymentId, "could not reach github, reconnect the github app and try again")
+	}
+
+	commit, err := s.ghClient.LatestCommit(ctx, buildCtx.InstallationId, buildCtx.RepoFullName, buildCtx.Branch)
+
+	if err != nil {
+		s.logger.Error("failed to read the branch",
+			slog.String("deployment_id", deploymentId),
+			slog.String("branch", buildCtx.Branch),
+			slog.String("error", err.Error()),
+		)
+		return "", s.markFailed(deploymentId, "branch "+buildCtx.Branch+" was not found in the repository")
+	}
+
+	if err := s.repo.SetCommit(ctx, deploymentId, commit.Sha, commit.Message); err != nil {
+		return "", err
+	}
+
+	s.logger.Info("commit resolved",
+		slog.String("deployment_id", deploymentId),
+		slog.String("sha", commit.Sha),
+	)
+
+	buildDir, err := s.clone(ctx, buildCtx, token)
+	if err != nil {
+		return buildDir, s.markFailed(deploymentId, "could not download the repository")
+	}
+	return buildDir, nil
 }
 
 func (s *Service) clone(ctx context.Context, b *deployment.BuildContext, token string) (string, error) {
