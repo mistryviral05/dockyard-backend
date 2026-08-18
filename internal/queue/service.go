@@ -48,7 +48,7 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 		defer os.RemoveAll(buildDir)
 	}
 	if err != nil {
-		return err
+		return s.markFailed(deploymentId, "the build source could not be prepared")
 	}
 
 	if err := sleep(ctx, fakeBuildDuration); err != nil {
@@ -90,7 +90,7 @@ func (s *Service) prepareBuildSource(ctx context.Context, deploymentId string) (
 			slog.String("deployment_id", deploymentId),
 			slog.String("error", err.Error()),
 		)
-		return "", s.markFailed(deploymentId, "could not reach github, reconnect the github app and try again")
+		return "", err
 	}
 
 	commit, err := s.ghClient.LatestCommit(ctx, buildCtx.InstallationId, buildCtx.RepoFullName, buildCtx.Branch)
@@ -101,7 +101,7 @@ func (s *Service) prepareBuildSource(ctx context.Context, deploymentId string) (
 			slog.String("branch", buildCtx.Branch),
 			slog.String("error", err.Error()),
 		)
-		return "", s.markFailed(deploymentId, "branch "+buildCtx.Branch+" was not found in the repository")
+		return "", err
 	}
 
 	if err := s.repo.SetCommit(ctx, deploymentId, commit.Sha, commit.Message); err != nil {
@@ -115,7 +115,7 @@ func (s *Service) prepareBuildSource(ctx context.Context, deploymentId string) (
 
 	buildDir, err := s.clone(ctx, buildCtx, token)
 	if err != nil {
-		return buildDir, s.markFailed(deploymentId, "could not download the repository")
+		return buildDir, err
 	}
 	return buildDir, nil
 }
