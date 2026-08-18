@@ -30,3 +30,10 @@ type ProjectRef struct {
 	DefaultBranch string
 	AgentId       sql.NullString
 }
+type BuildContext struct {
+	DeploymentId   string
+	ProjectId      string
+	Branch         string
+	RepoFullName   string
+	InstallationId string // github ka numeric id, humari row ka nahi
+}

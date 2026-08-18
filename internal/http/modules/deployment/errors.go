@@ -7,4 +7,5 @@ var (
 	ErrAgentNotSet        = errors.New("agent not set")
 	ErrDeployInProgress   = errors.New("deployment already in progress")
 	ErrDeploymentNotFound = errors.New("deployment not found")
+	ErrRepoNotLinked      = errors.New("repository not linked")
 )

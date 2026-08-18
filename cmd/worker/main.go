@@ -10,6 +10,7 @@ import (
 	"github.com/mistryviral05/dockyard/internal/config"
 	postgres "github.com/mistryviral05/dockyard/internal/http/database"
 	"github.com/mistryviral05/dockyard/internal/http/modules/deployment"
+	"github.com/mistryviral05/dockyard/internal/http/utils/gh"
 	"github.com/mistryviral05/dockyard/internal/logger"
 	"github.com/mistryviral05/dockyard/internal/queue"
 )
@@ -29,8 +30,15 @@ func main() {
 		slog.String("host", cfg.Database.Host),
 		slog.String("db", cfg.Database.Name),
 	)
+
+	// setup the gh
+	ghClient, err := gh.NewClient(&cfg.Github)
+	if err != nil {
+		log.Fatalf("Failed to set up the github app: %v", err)
+	}
+
 	deploymentRepository := deployment.NewRepository(db)
-	service := queue.NewService(deploymentRepository, logger)
+	service := queue.NewService(deploymentRepository,ghClient, logger)
 	handlers := queue.NewHandlers(logger, service)
 	srv := queue.NewServer(&cfg.Redis, logger, handlers)
 

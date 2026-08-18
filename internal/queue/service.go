@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mistryviral05/dockyard/internal/http/modules/deployment"
+	"github.com/mistryviral05/dockyard/internal/http/utils/gh"
 )
 
 var (
@@ -14,12 +15,13 @@ var (
 )
 
 type Service struct {
-	repo   deployment.Repository
-	logger *slog.Logger
+	repo     deployment.Repository
+	ghClient *gh.Client
+	logger   *slog.Logger
 }
 
-func NewService(repo deployment.Repository, logger *slog.Logger) *Service {
-	return &Service{repo: repo, logger: logger}
+func NewService(repo deployment.Repository, ghClient *gh.Client, logger *slog.Logger) *Service {
+	return &Service{repo: repo, ghClient: ghClient, logger: logger}
 }
 
 func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {

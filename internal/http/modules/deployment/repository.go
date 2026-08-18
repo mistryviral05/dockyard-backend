@@ -18,8 +18,6 @@ var updatableColumns = []string{
 	"error_message",
 }
 
-
-
 const (
 	ErrInvalidTransition = "invalid transition"
 )
@@ -31,6 +29,9 @@ type Repository interface {
 	HasActiveDeployment(ctx context.Context, projectID string) (bool, error)
 	GetByID(ctx context.Context, id, clerkID string) (*Deployment, error)
 	ListByProject(ctx context.Context, projectID, clerkID, cursor string, limit int) ([]*Deployment, error)
+	GetBuildContext(ctx context.Context, deploymentID string) (*BuildContext, error)
+	SetCommit(ctx context.Context, deploymentID, sha, message string) error
+
 	WithTx(db postgres.DBTX) Repository
 }
 
@@ -46,6 +47,39 @@ func NewRepository(db postgres.DBTX) Repository {
 	return &repository{
 		db: db,
 	}
+}
+
+func (r *repository) GetBuildContext(ctx context.Context, deploymentID string) (*BuildContext, error) {
+	var b BuildContext
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT d.id, d.project_id, d.branch,
+		       COALESCE(rp.repo_full_name, ''), gi.installation_id
+		FROM deployments d
+		JOIN projects p              ON p.id = d.project_id
+		JOIN repositories rp         ON rp.project_id = p.id
+		JOIN github_installations gi ON gi.id = rp.installation_id
+		WHERE d.id = $1
+	`, deploymentID).Scan(&b.DeploymentId, &b.ProjectId, &b.Branch, &b.RepoFullName, &b.InstallationId)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRepoNotLinked
+		}
+		return nil, err
+	}
+
+	return &b, nil
+}
+
+func (r *repository) SetCommit(ctx context.Context, deploymentID, sha, message string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE deployments
+		SET commit_sha = $2, commit_message = $3, updated_at = NOW()
+		WHERE id = $1
+	`, deploymentID, sha, message)
+
+	return err
 }
 
 func (r *repository) Transition(ctx context.Context, id, to string, extra map[string]interface{}) (bool, error) {
