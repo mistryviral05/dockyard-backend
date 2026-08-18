@@ -48,6 +48,7 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 		defer os.RemoveAll(buildDir)
 	}
 	if err != nil {
+		s.logger.Error("The build source could not be prepared : " + err.Error())
 		return s.markFailed(deploymentId, "the build source could not be prepared")
 	}
 
@@ -124,7 +125,7 @@ func (s *Service) clone(ctx context.Context, b *deployment.BuildContext, token s
 	s.logger.Info("Starting Clonning the repository...")
 	buildDir := filepath.Join(os.TempDir(), "dockyard", "build_"+b.DeploymentId)
 
-	if err := os.Mkdir(filepath.Dir(buildDir), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(buildDir), 0o755); err != nil {
 		return "", err
 	}
 
