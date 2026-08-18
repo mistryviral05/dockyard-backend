@@ -3,6 +3,9 @@ package queue
 import (
 	"context"
 	"log/slog"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/mistryviral05/dockyard/internal/http/modules/deployment"
@@ -10,8 +13,8 @@ import (
 )
 
 var (
-	fakeBuildDuration  = 5 * time.Second
-	fakeDeployDuration = 2 * time.Second
+	fakeBuildDuration  = 10 * time.Second
+	fakeDeployDuration = 5 * time.Second
 )
 
 type Service struct {
@@ -39,6 +42,46 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 	}
 
 	s.logger.Info("build started", slog.String("deployment_id", deploymentId))
+
+	// setup the github mint token and clone repo
+	buildCtx, err := s.repo.GetBuildContext(ctx, deploymentId)
+
+	token, err := s.ghClient.InstallationToken(ctx, buildCtx.InstallationId)
+	if err != nil {
+		s.logger.Error("failed to mint the installation token",
+			slog.String("deployment_id", deploymentId),
+			slog.String("error", err.Error()),
+		)
+		return s.markFailed(deploymentId, "could not reach github, reconnect the github app and try again")
+	}
+
+	commit, err := s.ghClient.LatestCommit(ctx, buildCtx.InstallationId, buildCtx.RepoFullName, buildCtx.Branch)
+
+	if err != nil {
+		s.logger.Error("failed to read the branch",
+			slog.String("deployment_id", deploymentId),
+			slog.String("branch", buildCtx.Branch),
+			slog.String("error", err.Error()),
+		)
+		return s.markFailed(deploymentId, "branch "+buildCtx.Branch+" was not found in the repository")
+	}
+
+	if err := s.repo.SetCommit(ctx, deploymentId, commit.Sha, commit.Message); err != nil {
+		return err
+	}
+
+	s.logger.Info("commit resolved",
+		slog.String("deployment_id", deploymentId),
+		slog.String("sha", commit.Sha),
+	)
+
+	buildDir, err := s.clone(ctx, buildCtx, token)
+	if buildDir != "" {
+		defer os.RemoveAll(buildDir)
+	}
+	if err != nil {
+		return s.markFailed(deploymentId, "could not download the repository")
+	}
 
 	if err := sleep(ctx, fakeBuildDuration); err != nil {
 		return s.markFailed(deploymentId, "the build was cancelled")
@@ -68,6 +111,37 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 
 	s.logger.Info("deployment is running", slog.String("deployment_id", deploymentId))
 	return nil
+}
+
+func (s *Service) clone(ctx context.Context, b *deployment.BuildContext, token string) (string, error) {
+	s.logger.Info("Starting Clonning the repository...")
+	buildDir := filepath.Join(os.TempDir(), "dockyard", "build_"+b.DeploymentId)
+
+	if err := os.Mkdir(filepath.Dir(buildDir), 0o755); err != nil {
+		return "", err
+	}
+
+	cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--branch", b.Branch, gh.CloneURL(token, b.RepoFullName), buildDir)
+	out, err := cmd.CombinedOutput()
+
+	if err != nil {
+		s.logger.Error("git clone failed",
+			slog.String("deployment_id", b.DeploymentId),
+			slog.String("repo", b.RepoFullName),
+			slog.String("output", gh.Redact(string(out), token)),
+			slog.String("error", err.Error()),
+		)
+		return buildDir, err
+	}
+
+	entries, _ := os.ReadDir(buildDir)
+	s.logger.Info("repository cloned",
+		slog.String("deployment_id", b.DeploymentId),
+		slog.String("repo", b.RepoFullName),
+		slog.String("dir", buildDir),
+		slog.Int("entries", len(entries)),
+	)
+	return buildDir, nil
 }
 
 // markFailed ke waqt job ka ctx mar chuka hota hai, isliye naya ctx.
