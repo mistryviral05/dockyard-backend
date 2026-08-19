@@ -52,6 +52,14 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 		return s.markFailed(deploymentId, "the build source could not be prepared")
 	}
 
+	dockerfilePath, err := s.resolveDockerfile(ctx, buildDir, deploymentId)
+	if err != nil {
+		s.logger.Error("The Dockerfile could not be found : " + err.Error())
+		return s.markFailed(deploymentId, "the Dockerfile could not be found")
+	}
+
+	s.logger.Info("Dockerfile found", slog.String("deployment_id", deploymentId), slog.String("dockerfile_path", dockerfilePath))
+
 	if err := sleep(ctx, fakeBuildDuration); err != nil {
 		return s.markFailed(deploymentId, "the build was cancelled")
 	}
@@ -167,6 +175,65 @@ func (s *Service) markFailed(deploymentID, message string) error {
 	}
 
 	return nil
+}
+
+func (s *Service) resolveDockerfile(ctx context.Context, buildDir string, deploymentId string) (string, error) {
+	dockerfilePath := filepath.Join(buildDir, "Dockerfile")
+
+	info, err := os.Stat(dockerfilePath)
+	if err == nil && !info.IsDir() {
+		s.logger.Info("using the repository Dockerfile",
+			slog.String("deployment_id", deploymentId),
+			slog.String("path", dockerfilePath),
+		)
+		return dockerfilePath, nil
+	}
+	if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
+	return s.generateDockerfile(ctx, deploymentId, buildDir)
+}
+
+func (s *Service) generateDockerfile(ctx context.Context, deploymentId string, buildDir string) (string, error) {
+	s.logger.Info("no Dockerfile in the repository, generating one",
+		slog.String("deployment_id", deploymentId),
+	)
+
+	args := []string{
+		"run", "--rm",
+		"-v", buildDir + ":/app",
+		"-w", "/app",
+	}
+
+	args = append(args, nixpacksImage, "build", "/app", "--out", "/app")
+
+	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
+
+	if err != nil {
+		s.logger.Error("nixpacks failed",
+			slog.String("deployment_id", deploymentId),
+			slog.String("output", string(out)),
+			slog.String("error", err.Error()),
+		)
+		return "", errNoDockerfile
+	}
+
+	generated := filepath.Join(buildDir, ".nixpacks", "Dockerfile")
+	if _, err := os.Stat(generated); err != nil {
+		s.logger.Error("nixpacks produced no Dockerfile",
+			slog.String("deployment_id", deploymentId),
+			slog.String("output", string(out)),
+		)
+		return "", errNoDockerfile
+	}
+
+	s.logger.Info("dockerfile generated",
+		slog.String("deployment_id", deploymentId),
+		slog.String("path", generated),
+	)
+
+	return generated, nil
+
 }
 
 func sleep(ctx context.Context, d time.Duration) error {
