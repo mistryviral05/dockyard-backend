@@ -8,7 +8,7 @@ DB_URL?=postgres://postgres:password@localhost:5432/dockyard?sslmode=disable
 MIGRATIONS_DIR=db/migrations/postgres
 
 build:
-	@go build -o build/$(APP) ./cmd/$(APP)/main.go
+	@go build -o bin/$(APP) ./cmd/$(APP)/main.go
 
 start:
 	@./build/$(APP) --config ./config/local.yaml

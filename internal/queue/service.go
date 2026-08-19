@@ -2,10 +2,13 @@ package queue
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/mistryviral05/dockyard/internal/http/modules/deployment"
@@ -13,7 +16,7 @@ import (
 )
 
 var (
-	fakeBuildDuration  = 10 * time.Second
+	fakeBuildDuration  = 60 * time.Second
 	fakeDeployDuration = 5 * time.Second
 )
 
@@ -54,8 +57,16 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 
 	dockerfilePath, err := s.resolveDockerfile(ctx, buildDir, deploymentId)
 	if err != nil {
-		s.logger.Error("The Dockerfile could not be found : " + err.Error())
-		return s.markFailed(deploymentId, "the Dockerfile could not be found")
+		s.logger.Error("failed to resolve the dockerfile",
+			slog.String("deployment_id", deploymentId),
+			slog.String("error", err.Error()),
+		)
+
+		if errors.Is(err, errNoDockerfile) {
+			return s.markFailed(deploymentId, "could not detect how to build this project, add a Dockerfile to your repository")
+		}
+
+		return s.markFailed(deploymentId, "the build could not be prepared")
 	}
 
 	s.logger.Info("Dockerfile found", slog.String("deployment_id", deploymentId), slog.String("dockerfile_path", dockerfilePath))
@@ -92,6 +103,14 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 
 func (s *Service) prepareBuildSource(ctx context.Context, deploymentId string) (string, error) {
 	buildCtx, err := s.repo.GetBuildContext(ctx, deploymentId)
+
+	if err != nil {
+		s.logger.Error("failed to load the build context",
+			slog.String("deployment_id", deploymentId),
+			slog.String("error", err.Error()),
+		)
+		return "", err
+	}
 
 	token, err := s.ghClient.InstallationToken(ctx, buildCtx.InstallationId)
 	if err != nil {
@@ -208,14 +227,17 @@ func (s *Service) generateDockerfile(ctx context.Context, deploymentId string, b
 	args = append(args, nixpacksImage, "build", "/app", "--out", "/app")
 
 	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
-
 	if err != nil {
+		reason := nixpacksReason(string(out))
+
 		s.logger.Error("nixpacks failed",
 			slog.String("deployment_id", deploymentId),
 			slog.String("output", string(out)),
+			slog.String("reason", reason),
 			slog.String("error", err.Error()),
 		)
-		return "", errNoDockerfile
+
+		return "", fmt.Errorf("%w: %s", errNoDockerfile, reason)
 	}
 
 	generated := filepath.Join(buildDir, ".nixpacks", "Dockerfile")
@@ -236,6 +258,16 @@ func (s *Service) generateDockerfile(ctx context.Context, deploymentId string, b
 
 }
 
+func nixpacksReason(out string) string {
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if after, ok := strings.CutPrefix(line, "Error: "); ok {
+			return after
+		}
+	}
+
+	return "could not detect how to build this project"
+}
 func sleep(ctx context.Context, d time.Duration) error {
 	select {
 	case <-time.After(d):
