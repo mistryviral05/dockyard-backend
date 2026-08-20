@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -46,16 +47,16 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 
 	s.logger.Info("build started", slog.String("deployment_id", deploymentId))
 
-	buildDir, err := s.prepareBuildSource(ctx, deploymentId)
-	if buildDir != "" {
-		defer os.RemoveAll(buildDir)
+	buildSource, err := s.prepareBuildSource(ctx, deploymentId)
+	if buildSource != nil {
+		defer os.RemoveAll(buildSource.Dir)
 	}
 	if err != nil {
 		s.logger.Error("The build source could not be prepared : " + err.Error())
 		return s.markFailed(deploymentId, "the build source could not be prepared")
 	}
 
-	dockerfilePath, err := s.resolveDockerfile(ctx, buildDir, deploymentId)
+	dockerfilePath, err := s.resolveDockerfile(ctx, buildSource.Dir, deploymentId)
 	if err != nil {
 		s.logger.Error("failed to resolve the dockerfile",
 			slog.String("deployment_id", deploymentId),
@@ -68,14 +69,18 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 
 		return s.markFailed(deploymentId, "the build could not be prepared")
 	}
+	buildSource.Dockerfile = dockerfilePath
 
-	s.logger.Info("Dockerfile found", slog.String("deployment_id", deploymentId), slog.String("dockerfile_path", dockerfilePath))
+	s.logger.Info("Dockerfile found", slog.String("deployment_id", deploymentId), slog.String("dockerfile_path", buildSource.Dockerfile))
 
-	if err := sleep(ctx, fakeBuildDuration); err != nil {
-		return s.markFailed(deploymentId, "the build was cancelled")
+	imageTag, err := s.buildImage(ctx, deploymentId, buildSource)
+	if err != nil {
+		s.logger.Error("the image could not be built",
+			slog.String("deployment_id", deploymentId),
+			slog.String("error", err.Error()),
+		)
+		return s.markFailed(deploymentId, "the image could not be built, check the build logs")
 	}
-
-	imageTag := "local.fake/dockyard/" + deploymentId + ":latest"
 	if _, err := s.repo.Transition(ctx, deploymentId, deployment.StatusDeploying, map[string]interface{}{
 		"image_tag": imageTag,
 	}); err != nil {
@@ -101,7 +106,7 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 	return nil
 }
 
-func (s *Service) prepareBuildSource(ctx context.Context, deploymentId string) (string, error) {
+func (s *Service) prepareBuildSource(ctx context.Context, deploymentId string) (*BuildSource, error) {
 	buildCtx, err := s.repo.GetBuildContext(ctx, deploymentId)
 
 	if err != nil {
@@ -109,7 +114,7 @@ func (s *Service) prepareBuildSource(ctx context.Context, deploymentId string) (
 			slog.String("deployment_id", deploymentId),
 			slog.String("error", err.Error()),
 		)
-		return "", err
+		return nil, err
 	}
 
 	token, err := s.ghClient.InstallationToken(ctx, buildCtx.InstallationId)
@@ -118,7 +123,7 @@ func (s *Service) prepareBuildSource(ctx context.Context, deploymentId string) (
 			slog.String("deployment_id", deploymentId),
 			slog.String("error", err.Error()),
 		)
-		return "", err
+		return nil, err
 	}
 
 	commit, err := s.ghClient.LatestCommit(ctx, buildCtx.InstallationId, buildCtx.RepoFullName, buildCtx.Branch)
@@ -129,11 +134,11 @@ func (s *Service) prepareBuildSource(ctx context.Context, deploymentId string) (
 			slog.String("branch", buildCtx.Branch),
 			slog.String("error", err.Error()),
 		)
-		return "", err
+		return nil, err
 	}
 
 	if err := s.repo.SetCommit(ctx, deploymentId, commit.Sha, commit.Message); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	s.logger.Info("commit resolved",
@@ -143,9 +148,13 @@ func (s *Service) prepareBuildSource(ctx context.Context, deploymentId string) (
 
 	buildDir, err := s.clone(ctx, buildCtx, token)
 	if err != nil {
-		return buildDir, err
+		return nil, err
 	}
-	return buildDir, nil
+	return &BuildSource{
+		Dir:    buildDir,
+		Commit: commit,
+		Build:  buildCtx,
+	}, nil
 }
 
 func (s *Service) clone(ctx context.Context, b *deployment.BuildContext, token string) (string, error) {
@@ -256,6 +265,65 @@ func (s *Service) generateDockerfile(ctx context.Context, deploymentId string, b
 
 	return generated, nil
 
+}
+
+func (s *Service) imageTag(src *BuildSource) string {
+	sha := src.Commit.Sha
+	if len(sha) > 12 {
+		sha = sha[:12]
+	}
+
+	return "ghcr.io/" + strings.ToLower(src.Build.RepoFullName) + ":" + sha
+}
+
+func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) error {
+	pipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	cmd.Stderr = cmd.Stdout
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	sc := bufio.NewScanner(pipe)
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	for sc.Scan() {
+		if err := sc.Err(); err != nil {
+			s.logger.Error("Failed to build output :" + err.Error())
+			return err
+		}
+		s.logger.Info("build",
+			slog.String("deployment_id", deploymentId),
+			slog.String("line", sc.Text()),
+		)
+	}
+
+	return cmd.Wait()
+}
+
+func (s *Service) buildImage(ctx context.Context, deploymentId string, src *BuildSource) (string, error) {
+	tag := s.imageTag(src)
+
+	s.logger.Info("building the image",
+		slog.String("deployment_id", deploymentId),
+		slog.String("image_tag", tag),
+	)
+
+	cmd := exec.CommandContext(ctx, "docker", "buildx", "build",
+		"-f", src.Dockerfile,
+		"-t", tag,
+		"--load",
+		src.Dir,
+	)
+
+	if err := s.stream(ctx, deploymentId, cmd); err != nil {
+		return "", err
+	}
+
+	return tag, nil
 }
 
 func nixpacksReason(out string) string {
