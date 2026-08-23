@@ -15,6 +15,7 @@ import (
 
 	"github.com/mistryviral05/dockyard/internal/config"
 	"github.com/mistryviral05/dockyard/internal/http/modules/deployment"
+	"github.com/mistryviral05/dockyard/internal/http/utils/centrifugo"
 	"github.com/mistryviral05/dockyard/internal/http/utils/gh"
 )
 
@@ -24,14 +25,21 @@ var (
 )
 
 type Service struct {
-	repo     deployment.Repository
-	ghClient *gh.Client
-	registry *config.ContainerRegistry
-	logger   *slog.Logger
+	repo       deployment.Repository
+	ghClient   *gh.Client
+	registry   *config.ContainerRegistry
+	centrifugo *centrifugo.Client
+	logger     *slog.Logger
 }
 
-func NewService(repo deployment.Repository, ghClient *gh.Client, registry *config.ContainerRegistry, logger *slog.Logger) *Service {
-	return &Service{repo: repo, ghClient: ghClient, registry: registry, logger: logger}
+func NewService(repo deployment.Repository, ghClient *gh.Client, registry *config.ContainerRegistry, realtime *centrifugo.Client, logger *slog.Logger) *Service {
+	return &Service{
+		repo:       repo,
+		ghClient:   ghClient,
+		registry:   registry,
+		centrifugo: realtime,
+		logger:     logger,
+	}
 }
 
 func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
@@ -49,6 +57,7 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 	}
 
 	s.logger.Info("build started", slog.String("deployment_id", deploymentId))
+	s.publishSystemLine(deploymentId, "build started, fetching your repository")
 
 	buildSource, err := s.prepareBuildSource(ctx, deploymentId)
 	if buildSource != nil {
@@ -98,6 +107,7 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 		slog.String("deployment_id", deploymentId),
 		slog.String("image_tag", imageTag),
 	)
+	s.publishSystemLine(deploymentId, "image pushed, starting your app")
 
 	if err := sleep(ctx, fakeDeployDuration); err != nil {
 		return s.markFailed(deploymentId, "the deployment was cancelled")
@@ -110,6 +120,7 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 	}
 
 	s.logger.Info("deployment is running", slog.String("deployment_id", deploymentId))
+	s.publishSystemLine(deploymentId, "deployment is running")
 	return nil
 }
 
@@ -222,6 +233,9 @@ func (s *Service) markFailed(deploymentID, message string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// wahi message jo db me jaata hai, wahi live view me bhi dikhe
+	s.publishSystemLine(deploymentID, message)
+
 	if _, err := s.repo.Transition(ctx, deploymentID, deployment.StatusFailed, map[string]interface{}{
 		"error_message": message,
 	}); err != nil {
@@ -329,6 +343,11 @@ func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) 
 		return err
 	}
 
+	// stream ke bahar nikalne se pehle bacha hua batch nikal jaana chahiye,
+	// warna failure ki aakhri lines user ko kabhi nahi dikhengi
+	logs := s.newLogStream(deploymentId, LogTypeBuild)
+	defer logs.Close()
+
 	sc := bufio.NewScanner(pipe)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
@@ -337,9 +356,12 @@ func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) 
 			s.logger.Error("Failed to build output :" + err.Error())
 			return err
 		}
+
+		line := sc.Text()
+		logs.Add(line)
 		s.logger.Info("build",
 			slog.String("deployment_id", deploymentId),
-			slog.String("line", sc.Text()),
+			slog.String("line", line),
 		)
 	}
 

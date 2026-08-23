@@ -1,7 +1,25 @@
 package queue
 
+import "time"
+
 const (
 	nixpacksImage = "dockyard/nixpacks:1.41.0"
+)
+
+const (
+	// logBatchSize: ek publish me kitni lines. History 500 messages ki hai,
+	// isliye 20 lines per message ~10,000 lines cover karta hai.
+	logBatchSize = 20
+
+	// logFlushInterval: itni der chup rehne pe adhoora batch bhi bhej do,
+	// warna slow build me screen jami hui lagti hai.
+	logFlushInterval = 400 * time.Millisecond
+
+	// logBufferSize: buffer bhar gaya to lines girti hain. Build ko rokne se
+	// behtar hai kuch lines kho jayein.
+	logBufferSize = 2048
+
+	logPublishTimeout = 5 * time.Second
 )
 
 // Sirf wahi entries jo build ke liye kabhi zaroori nahi hoti. dist/build aur

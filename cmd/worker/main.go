@@ -10,6 +10,7 @@ import (
 	"github.com/mistryviral05/dockyard/internal/config"
 	postgres "github.com/mistryviral05/dockyard/internal/http/database"
 	"github.com/mistryviral05/dockyard/internal/http/modules/deployment"
+	"github.com/mistryviral05/dockyard/internal/http/utils/centrifugo"
 	"github.com/mistryviral05/dockyard/internal/http/utils/gh"
 	"github.com/mistryviral05/dockyard/internal/logger"
 	"github.com/mistryviral05/dockyard/internal/queue"
@@ -37,8 +38,11 @@ func main() {
 		log.Fatalf("Failed to set up the github app: %v", err)
 	}
 
+	realtime := centrifugo.New(&cfg.Centrifugo)
+	logger.Info("Realtime configured", slog.String("centrifugo", cfg.Centrifugo.APIUrl))
+
 	deploymentRepository := deployment.NewRepository(db)
-	service := queue.NewService(deploymentRepository, ghClient, &cfg.ContainerRegistry, logger)
+	service := queue.NewService(deploymentRepository, ghClient, &cfg.ContainerRegistry, realtime, logger)
 	handlers := queue.NewHandlers(logger, service)
 	srv := queue.NewServer(&cfg.Redis, logger, handlers)
 

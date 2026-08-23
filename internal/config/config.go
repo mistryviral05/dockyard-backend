@@ -15,6 +15,26 @@ type ContainerRegistry struct {
 	RegistryUsername  string `yaml:"registry_username" env-required:"true"`
 	RegistryToken     string `yaml:"registry_token" env-required:"true"`
 }
+type Centrifugo struct {
+	// APIUrl worker/server ke liye hai, WSUrl browser ke liye. Docker me ye
+	// dono alag hote hain, isliye alag rakhe hain.
+	APIUrl string `yaml:"api_url" env-required:"true"`
+	WSUrl  string `yaml:"ws_url" env-required:"true"`
+
+	// APIKey publish karne ke liye: centrifugo.json ke "api_key" se match kare
+	APIKey string `yaml:"api_key" env-required:"true"`
+
+	// TokenSecret connection JWT sign karta hai: centrifugo.json ke
+	// "token_hmac_secret_key" se bilkul same hona chahiye
+	TokenSecret string `yaml:"token_secret" env-required:"true"`
+
+	// SubscribeSecret wo shared header hai jo centrifugo subscribe proxy call
+	// me bhejta hai. Khali chhod do to check off ho jata hai (local dev).
+	SubscribeSecret string `yaml:"subscribe_secret"`
+
+	TokenTTL time.Duration `yaml:"token_ttl" env-default:"1h"`
+}
+
 type Redis struct {
 	Addr     string `yaml:"addr" env-required:"true"`
 	Password string `yaml:"password" env-required:"true"`
@@ -68,6 +88,7 @@ type Config struct {
 	Github            `yaml:"github"`
 	Redis             `yaml:"redis"`
 	ContainerRegistry `yaml:"container_registry"`
+	Centrifugo        `yaml:"centrifugo"`
 }
 
 func MustLoad() *Config {

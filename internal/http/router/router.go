@@ -7,6 +7,7 @@ import (
 	"github.com/mistryviral05/dockyard/internal/http/modules/deployment"
 	"github.com/mistryviral05/dockyard/internal/http/modules/github"
 	"github.com/mistryviral05/dockyard/internal/http/modules/project"
+	"github.com/mistryviral05/dockyard/internal/http/modules/realtime"
 	"github.com/mistryviral05/dockyard/internal/http/modules/user"
 	"github.com/mistryviral05/dockyard/internal/http/modules/workspace"
 )
@@ -19,6 +20,7 @@ type Modules struct {
 	Agent      *agent.Handler
 	Project    *project.Handler
 	Deployment *deployment.Handler
+	Realtime   *realtime.Handler
 }
 
 func New(m Modules) http.Handler {
@@ -30,5 +32,6 @@ func New(m Modules) http.Handler {
 	agent.RegisterRoutes(mux, m.Agent, m.Auth, base)
 	project.RegisterRoutes(mux, m.Project, m.Auth, base)
 	deployment.RegisterRoutes(mux, m.Deployment, m.Auth, base)
+	realtime.RegisterRoutes(mux, m.Realtime, m.Auth, base)
 	return mux
 }
