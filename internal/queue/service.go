@@ -158,6 +158,9 @@ func (s *Service) prepareBuildSource(ctx context.Context, deploymentId string) (
 		// adhoora clone bhi disk pe pada reh sakta hai, caller ko cleanup ka mauka do
 		return &BuildSource{Dir: buildDir}, err
 	}
+
+	s.writeDockerignore(deploymentId, buildDir)
+
 	return &BuildSource{
 		Dir:    buildDir,
 		Commit: commit,
@@ -194,6 +197,24 @@ func (s *Service) clone(ctx context.Context, b *deployment.BuildContext, token s
 		slog.Int("entries", len(entries)),
 	)
 	return buildDir, nil
+}
+
+// nixpacks ka Dockerfile "COPY . /app" teen baar karta hai, isliye context ka
+// har extra byte teen layers me multiply hota hai. Repo ka apna .dockerignore
+// ho to usko haath nahi lagate. Fail hone pe build rokna nahi hai.
+func (s *Service) writeDockerignore(deploymentId, buildDir string) {
+	path := filepath.Join(buildDir, ".dockerignore")
+
+	if _, err := os.Stat(path); err == nil {
+		return
+	}
+
+	if err := os.WriteFile(path, []byte(defaultDockerignore), 0o644); err != nil {
+		s.logger.Warn("could not write the .dockerignore",
+			slog.String("deployment_id", deploymentId),
+			slog.String("error", err.Error()),
+		)
+	}
 }
 
 // markFailed ke waqt job ka ctx mar chuka hota hai, isliye naya ctx.
@@ -378,6 +399,7 @@ func (s *Service) buildImage(ctx context.Context, deploymentId string, src *Buil
 	cmd := exec.CommandContext(ctx, "docker", "--config", cfgDir,
 		"buildx", "build",
 		"--progress", "plain",
+		"--provenance=false",
 		"-f", src.Dockerfile,
 		"-t", tag,
 		"--push",
