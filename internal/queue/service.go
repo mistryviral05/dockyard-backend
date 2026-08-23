@@ -21,7 +21,7 @@ import (
 
 var (
 	// fakeBuildDuration  = 60 * time.Second
-	fakeDeployDuration = 5 * time.Second
+	fakeDeployDuration = 15 * time.Second
 )
 
 type Service struct {
@@ -44,6 +44,8 @@ func NewService(repo deployment.Repository, ghClient *gh.Client, registry *confi
 
 func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 
+	s.publishSystemLine(deploymentId, "deployment queued, waiting for a worker to pick it up")
+	sleep(ctx, fakeDeployDuration)
 	claimed, err := s.repo.Transition(ctx, deploymentId, deployment.StatusBuilding, nil)
 	if err != nil {
 		return err
