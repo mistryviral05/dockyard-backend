@@ -9,7 +9,12 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
-
+type ContainerRegistry struct {
+	RegistryHost      string `yaml:"registry_host" env-required:"true"`
+	RegistryNamespace string `yaml:"registry_namespace" env-required:"true"`
+	RegistryUsername  string `yaml:"registry_username" env-required:"true"`
+	RegistryToken     string `yaml:"registry_token" env-required:"true"`
+}
 type Redis struct {
 	Addr     string `yaml:"addr" env-required:"true"`
 	Password string `yaml:"password" env-required:"true"`
@@ -17,7 +22,7 @@ type Redis struct {
 }
 
 type HTTPServer struct {
-	Addr string `yaml:"address" env-required:"true" env-default:":8080"`
+	Addr         string        `yaml:"address" env-required:"true" env-default:":8080"`
 	ReadTimeout  time.Duration `yaml:"read_timeout" env:"HTTP_READ_TIMEOUT" env-default:"10s"`
 	WriteTimeout time.Duration `yaml:"write_timeout" env:"HTTP_WRITE_TIMEOUT" env-default:"30s"`
 	IdleTimeout  time.Duration `yaml:"idle_timeout" env:"HTTP_IDLE_TIMEOUT" env-default:"60s"`
@@ -55,13 +60,14 @@ type Github struct {
 }
 
 type Config struct {
-	Env        string `yaml:"env" env-required:"true" env-default:"production"`
-	HTTPServer `yaml:"http_server"`
-	CORS       `yaml:"cors"`
-	Clerk      `yaml:"clerk"`
-	Database   `yaml:"database"`
-	Github     `yaml:"github"`
-	Redis      `yaml:"redis"`
+	Env               string `yaml:"env" env-required:"true" env-default:"production"`
+	HTTPServer        `yaml:"http_server"`
+	CORS              `yaml:"cors"`
+	Clerk             `yaml:"clerk"`
+	Database          `yaml:"database"`
+	Github            `yaml:"github"`
+	Redis             `yaml:"redis"`
+	ContainerRegistry `yaml:"container_registry"`
 }
 
 func MustLoad() *Config {

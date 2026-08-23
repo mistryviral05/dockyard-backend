@@ -38,7 +38,7 @@ func main() {
 	}
 
 	deploymentRepository := deployment.NewRepository(db)
-	service := queue.NewService(deploymentRepository,ghClient, logger)
+	service := queue.NewService(deploymentRepository, ghClient, &cfg.ContainerRegistry, logger)
 	handlers := queue.NewHandlers(logger, service)
 	srv := queue.NewServer(&cfg.Redis, logger, handlers)
 

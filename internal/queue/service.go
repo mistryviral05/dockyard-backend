@@ -3,6 +3,7 @@ package queue
 import (
 	"bufio"
 	"context"
+	"encoding/base32"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,23 +13,25 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mistryviral05/dockyard/internal/config"
 	"github.com/mistryviral05/dockyard/internal/http/modules/deployment"
 	"github.com/mistryviral05/dockyard/internal/http/utils/gh"
 )
 
 var (
-	fakeBuildDuration  = 60 * time.Second
+	// fakeBuildDuration  = 60 * time.Second
 	fakeDeployDuration = 5 * time.Second
 )
 
 type Service struct {
 	repo     deployment.Repository
 	ghClient *gh.Client
+	registry *config.ContainerRegistry
 	logger   *slog.Logger
 }
 
-func NewService(repo deployment.Repository, ghClient *gh.Client, logger *slog.Logger) *Service {
-	return &Service{repo: repo, ghClient: ghClient, logger: logger}
+func NewService(repo deployment.Repository, ghClient *gh.Client, registry *config.ContainerRegistry, logger *slog.Logger) *Service {
+	return &Service{repo: repo, ghClient: ghClient, registry: registry, logger: logger}
 }
 
 func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
@@ -75,6 +78,10 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 
 	imageTag, err := s.buildImage(ctx, deploymentId, buildSource)
 	if err != nil {
+		if errors.Is(err, errRegistryLogin) {
+			return s.markFailed(deploymentId, "the image registry is unreachable right now, please try again")
+		}
+
 		s.logger.Error("the image could not be built",
 			slog.String("deployment_id", deploymentId),
 			slog.String("error", err.Error()),
@@ -148,7 +155,8 @@ func (s *Service) prepareBuildSource(ctx context.Context, deploymentId string) (
 
 	buildDir, err := s.clone(ctx, buildCtx, token)
 	if err != nil {
-		return nil, err
+		// adhoora clone bhi disk pe pada reh sakta hai, caller ko cleanup ka mauka do
+		return &BuildSource{Dir: buildDir}, err
 	}
 	return &BuildSource{
 		Dir:    buildDir,
@@ -273,7 +281,20 @@ func (s *Service) imageTag(src *BuildSource) string {
 		sha = sha[:12]
 	}
 
-	return "ghcr.io/" + strings.ToLower(src.Build.RepoFullName) + ":" + sha
+	return fmt.Sprintf("%s/%s/%s:%s",
+		s.registry.RegistryHost,
+		strings.ToLower(s.registry.RegistryNamespace),
+		imageName(src.Build.ProjectId),
+		sha,
+	)
+}
+
+// registry repo name sirf lowercase leta hai aur separator ke strict rules
+// rakhta hai. nanoid me uppercase, '-' aur '_' kahin bhi aa sakte hain,
+// isliye use base32-hex me encode karke safe naam banate hain.
+func imageName(projectId string) string {
+	enc := base32.HexEncoding.WithPadding(base32.NoPadding)
+	return "proj-" + strings.ToLower(enc.EncodeToString([]byte(projectId)))
 }
 
 func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) error {
@@ -304,18 +325,62 @@ func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) 
 	return cmd.Wait()
 }
 
+// dockerLogin har build ke liye alag docker config folder banata hai. Global
+// ~/.docker/config.json share karne se parallel builds ek doosre ka credential
+// overwrite kar dete hain, aur ek kharab entry poori machine ke pulls tod deti hai.
+func (s *Service) dockerLogin(ctx context.Context, deploymentId string) (string, error) {
+	cfgDir, err := os.MkdirTemp("", "dockyard-docker-")
+	if err != nil {
+		return "", err
+	}
+
+	// local/anonymous registry: username khali hai to login ki zaroorat nahi
+	if s.registry.RegistryUsername == "" {
+		return cfgDir, nil
+	}
+
+	cmd := exec.CommandContext(ctx, "docker", "--config", cfgDir,
+		"login", s.registry.RegistryHost,
+		"-u", s.registry.RegistryUsername,
+		"--password-stdin",
+	)
+	cmd.Stdin = strings.NewReader(s.registry.RegistryToken)
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		os.RemoveAll(cfgDir)
+		s.logger.Error("registry login failed",
+			slog.String("deployment_id", deploymentId),
+			slog.String("registry", s.registry.RegistryHost),
+			slog.String("output", gh.Redact(string(out), s.registry.RegistryToken)),
+			slog.String("error", err.Error()),
+		)
+		return "", errRegistryLogin
+	}
+
+	return cfgDir, nil
+}
+
 func (s *Service) buildImage(ctx context.Context, deploymentId string, src *BuildSource) (string, error) {
 	tag := s.imageTag(src)
+
+	cfgDir, err := s.dockerLogin(ctx, deploymentId)
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(cfgDir)
 
 	s.logger.Info("building the image",
 		slog.String("deployment_id", deploymentId),
 		slog.String("image_tag", tag),
 	)
 
-	cmd := exec.CommandContext(ctx, "docker", "buildx", "build",
+	cmd := exec.CommandContext(ctx, "docker", "--config", cfgDir,
+		"buildx", "build",
+		"--progress", "plain",
 		"-f", src.Dockerfile,
 		"-t", tag,
-		"--load",
+		"--push",
 		src.Dir,
 	)
 
