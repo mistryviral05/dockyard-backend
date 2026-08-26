@@ -11,17 +11,17 @@ build:
 	@go build -o bin/$(APP) ./cmd/$(APP)/main.go
 
 start:
-	@./build/$(APP) --config ./config/local.yaml
+	@./build/$(APP) --config ./config/development.env
 
 run:
-	@go run ./cmd/$(APP)/main.go --config ./config/local.yaml
+	@go run ./cmd/$(APP)/main.go --config ./config/development.env
 
 run-worker:
-	@go run ./cmd/worker/main.go --config ./config/local.yaml
+	@go run ./cmd/worker/main.go --config ./config/development.env
 
 # this is only for temporary testing of ping endpoint, not for production use
 run-ping:
-	@go run ./cmd/ping/main.go --config ./config/local.yaml
+	@go run ./cmd/ping/main.go --config ./config/development.env
 
 # Create a new empty migration pair: make migrate-create name=add_something
 migrate-create:

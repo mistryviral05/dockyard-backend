@@ -9,52 +9,62 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
+// Har field pe `env` tag hai taki config bina yaml file ke bhi ban sake.
+// Tag ke bina cleanenv us field ko env se padhta hi nahi.
+//
+// Dhyan: `env-required` aur `env-default` ek saath mat lagana. cleanenv
+// pehle required check karta hai aur wahin error de deta hai, isliye us
+// case me default kabhi apply nahi hota.
+
 type ContainerRegistry struct {
-	RegistryHost      string `yaml:"registry_host" env-required:"true"`
-	RegistryNamespace string `yaml:"registry_namespace" env-required:"true"`
-	RegistryUsername  string `yaml:"registry_username" env-required:"true"`
-	RegistryToken     string `yaml:"registry_token" env-required:"true"`
+	RegistryHost      string `yaml:"registry_host" env:"REGISTRY_HOST" env-required:"true"`
+	RegistryNamespace string `yaml:"registry_namespace" env:"REGISTRY_NAMESPACE" env-required:"true"`
+	RegistryUsername  string `yaml:"registry_username" env:"REGISTRY_USERNAME" env-required:"true"`
+	RegistryToken     string `yaml:"registry_token" env:"REGISTRY_TOKEN" env-required:"true"`
 }
 type Centrifugo struct {
 	// APIUrl worker/server ke liye hai, WSUrl browser ke liye. Docker me ye
 	// dono alag hote hain, isliye alag rakhe hain.
-	APIUrl string `yaml:"api_url" env-required:"true"`
-	WSUrl  string `yaml:"ws_url" env-required:"true"`
+	APIUrl string `yaml:"api_url" env:"CENTRIFUGO_API_URL" env-required:"true"`
+	WSUrl  string `yaml:"ws_url" env:"CENTRIFUGO_WS_URL" env-required:"true"`
 
 	// APIKey publish karne ke liye: centrifugo.json ke "api_key" se match kare
-	APIKey string `yaml:"api_key" env-required:"true"`
+	APIKey string `yaml:"api_key" env:"CENTRIFUGO_API_KEY" env-required:"true"`
 
 	// TokenSecret connection JWT sign karta hai: centrifugo.json ke
 	// "token_hmac_secret_key" se bilkul same hona chahiye
-	TokenSecret string `yaml:"token_secret" env-required:"true"`
+	TokenSecret string `yaml:"token_secret" env:"CENTRIFUGO_TOKEN_SECRET" env-required:"true"`
 
 	// SubscribeSecret wo shared header hai jo centrifugo subscribe proxy call
 	// me bhejta hai. Khali chhod do to check off ho jata hai (local dev).
-	SubscribeSecret string `yaml:"subscribe_secret"`
+	SubscribeSecret string `yaml:"subscribe_secret" env:"CENTRIFUGO_SUBSCRIBE_SECRET"`
 
-	TokenTTL time.Duration `yaml:"token_ttl" env-default:"1h"`
+	TokenTTL time.Duration `yaml:"token_ttl" env:"CENTRIFUGO_TOKEN_TTL" env-default:"1h"`
 }
 
 type Redis struct {
-	Addr     string `yaml:"addr" env-required:"true"`
-	Password string `yaml:"password" env-required:"true"`
-	DB       int    `yaml:"db"  env-default:"0"`
+	Addr     string `yaml:"addr" env:"REDIS_ADDR" env-required:"true"`
+	Password string `yaml:"password" env:"REDIS_PASSWORD" env-required:"true"`
+	DB       int    `yaml:"db" env:"REDIS_DB" env-default:"0"`
 }
 
 type HTTPServer struct {
-	Addr         string        `yaml:"address" env-required:"true" env-default:":8080"`
+	// Render/VPS pe 0.0.0.0 pe bind karna zaroori hai. localhost pe bind
+	// karoge to bahar se koi connect nahi kar payega, health check bhi nahi.
+	Addr         string        `yaml:"address" env:"HTTP_ADDRESS" env-required:"true"`
 	ReadTimeout  time.Duration `yaml:"read_timeout" env:"HTTP_READ_TIMEOUT" env-default:"10s"`
 	WriteTimeout time.Duration `yaml:"write_timeout" env:"HTTP_WRITE_TIMEOUT" env-default:"30s"`
 	IdleTimeout  time.Duration `yaml:"idle_timeout" env:"HTTP_IDLE_TIMEOUT" env-default:"60s"`
 }
 
 type CORS struct {
-	AllowedOrigins []string `yaml:"allowed_origins" env-required:"true"`
+	// env me comma se alag karo: "https://a.com,https://b.com"
+	AllowedOrigins []string `yaml:"allowed_origins" env:"CORS_ALLOWED_ORIGINS" env-required:"true"`
 }
 
 type Clerk struct {
-	SecretKey     string `yaml:"secret_key" env-required:"true"`
-	WebhookSecret string `yaml:"webhook_secret" env-required:"true"`
+	SecretKey     string `yaml:"secret_key" env:"CLERK_SECRET_KEY" env-required:"true"`
+	WebhookSecret string `yaml:"webhook_secret" env:"CLERK_WEBHOOK_SECRET" env-required:"true"`
 }
 
 type Database struct {
@@ -70,17 +80,21 @@ type Database struct {
 }
 
 type Github struct {
-	AppId          string `yaml:"app_id" env-required:"true"`
-	AppSlug        string `yaml:"app_slug" env-required:"true"`
-	ClientId       string `yaml:"client_id" env-required:"true"`
-	ClientSecret   string `yaml:"client_secret" env-required:"true"`
-	PrivateKeyPath string `yaml:"private_key_path" env-required:"true"`
-	WebhookSecret  string `yaml:"webhook_secret" env-required:"true"`
-	StateSecret    string `yaml:"state_secret" env-required:"true"`
+	AppId        string `yaml:"app_id" env:"GITHUB_APP_ID" env-required:"true"`
+	AppSlug      string `yaml:"app_slug" env:"GITHUB_APP_SLUG" env-required:"true"`
+	ClientId     string `yaml:"client_id" env:"GITHUB_CLIENT_ID" env-required:"true"`
+	ClientSecret string `yaml:"client_secret" env:"GITHUB_CLIENT_SECRET" env-required:"true"`
+
+	// Ye ek file path hai, key ka content nahi. Env me PEM nahi bhej sakte,
+	// isliye host pe file rakhni hi padegi (Render pe Secret Files).
+	PrivateKeyPath string `yaml:"private_key_path" env:"GITHUB_PRIVATE_KEY_PATH" env-required:"true"`
+
+	WebhookSecret string `yaml:"webhook_secret" env:"GITHUB_WEBHOOK_SECRET" env-required:"true"`
+	StateSecret   string `yaml:"state_secret" env:"GITHUB_STATE_SECRET" env-required:"true"`
 }
 
 type Config struct {
-	Env               string `yaml:"env" env-required:"true" env-default:"production"`
+	Env               string `yaml:"env" env:"ENV" env-required:"true"`
 	HTTPServer        `yaml:"http_server"`
 	CORS              `yaml:"cors"`
 	Clerk             `yaml:"clerk"`
@@ -91,29 +105,41 @@ type Config struct {
 	Centrifugo        `yaml:"centrifugo"`
 }
 
+// MustLoad config uthata hai. Do tarike chalte hain:
+//
+//   - File: --config ./config/local.yaml ya CONFIG_PATH=/etc/secrets/config.yaml
+//     File padhne ke baad env vars usko override karte hain, isliye ek
+//     value ko temporarily badalna ho to file chhedne ki zaroorat nahi.
+//
+//   - Env: koi path mat do, poora config env vars se banega. Render aur
+//     VPS pe yahi seedha raasta hai.
+//
+// Local dev pehle jaisa hi chalta hai - `make run` --config bhejta hai.
 func MustLoad() *Config {
 
-	var configPath string
-
-	configPath = os.Getenv("CONFIG_PATH")
+	configPath := os.Getenv("CONFIG_PATH")
 
 	if configPath == "" {
 		flags := flag.String("config", "", "Path to config file")
 		flag.Parse()
 		configPath = *flags
+	}
 
-		if configPath == "" {
-			log.Fatal("Config Path is not provided!")
+	var cfg Config
+
+	// koi file nahi di gayi: sab kuch env se
+	if configPath == "" {
+		if err := cleanenv.ReadEnv(&cfg); err != nil {
+			log.Fatalf("Can't read the config from the environment : %s", err.Error())
 		}
+		return &cfg
 	}
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		log.Fatalf("Config file does not exist : %s", err.Error())
 	}
-	var cfg Config
-	err := cleanenv.ReadConfig(configPath, &cfg)
 
-	if err != nil {
+	if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
 		log.Fatalf("Can't read your config file : %s", err.Error())
 	}
 
