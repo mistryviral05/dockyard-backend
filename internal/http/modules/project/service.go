@@ -22,10 +22,12 @@ func NewService(repo Repository, db *sql.DB) *Service {
 
 // Create writes the project and its repository in one transaction:
 // a project without its repo row is not a valid state.
-func (s *Service) Create(ctx context.Context, clerkID string, req *CreateProjectRequest, repo *RepositoryRequest) error {
+// Nayi project id wapas jaati hai, kyunki create ke turant baad user ko
+// usi project ke page pe bhejna hota hai.
+func (s *Service) Create(ctx context.Context, clerkID string, req *CreateProjectRequest, repo *RepositoryRequest) (string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer tx.Rollback()
 
@@ -45,7 +47,7 @@ func (s *Service) Create(ctx context.Context, clerkID string, req *CreateProject
 		DefaultBranch: branch,
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	err = txRepo.CreateRepository(ctx, &CreateRepositoryDto{
@@ -61,10 +63,14 @@ func (s *Service) Create(ctx context.Context, clerkID string, req *CreateProject
 		DefaultBranch: branch,
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return "", err
+	}
+
+	return projectId, nil
 }
 
 // SetAgent project ka agent set ya badalta hai aur naya detail wapas deta

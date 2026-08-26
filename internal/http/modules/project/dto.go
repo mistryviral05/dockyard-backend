@@ -23,6 +23,13 @@ type RepositoryRequest struct {
 	DefaultBranch string `json:"default_branch" validate:"omitempty,max=255"`
 }
 
+// CreateProjectResponse me id isliye hai ki create ke baad frontend seedha
+// /projects/{id} pe ja sake, list dobara fetch karke apna project dhoondhe bina.
+type CreateProjectResponse struct {
+	Id   string `json:"id"`
+	Name string `json:"project_name"`
+}
+
 type ProjectDto struct {
 	Id               string  `json:"id"`
 	Name             string  `json:"project_name"`

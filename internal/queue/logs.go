@@ -17,14 +17,31 @@ const (
 	LogTypeSystem = "system"
 )
 
+// Ek hi channel pe do tarah ke messages jaate hain, isliye har message me
+// event hai: lines log viewer me jaati hain, status timeline aur cache ko.
+const (
+	EventLog    = "log"
+	EventStatus = "status"
+)
+
 // logMessage wahi shape hai jo dashboard ko milta hai.
 // seq isliye hai ki client out of order ya duplicate messages pehchan sake -
 // reconnect pe centrifugo history dobara bhej deta hai.
 type logMessage struct {
+	Event string   `json:"event"`
 	Seq   int      `json:"seq"`
 	Type  string   `json:"type"`
 	Lines []string `json:"lines"`
 	At    string   `json:"at"`
+}
+
+// statusMessage har transition pe jaata hai, taki client polling kiye bina
+// timeline aage badha sake aur terminal status pe apna cache saaf kar sake.
+type statusMessage struct {
+	Event  string `json:"event"`
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
+	At     string `json:"at"`
 }
 
 // logStream build ki lines batch karke Centrifugo pe bhejta hai.
@@ -188,6 +205,7 @@ func (l *logStream) publish(seq int, lines []string) {
 	defer cancel()
 
 	msg := logMessage{
+		Event: EventLog,
 		Seq:   seq,
 		Type:  l.logType,
 		Lines: append([]string(nil), lines...),
@@ -204,6 +222,29 @@ func (l *logStream) publish(seq int, lines []string) {
 	}
 }
 
+// publishStatus deployment ka naya status bhejta hai. errMessage sirf failed
+// pe bharta hai. Fail hona yahan bhi build fail hona nahi hai: status db me
+// ja hi chuka hai, client refresh pe sahi state le lega.
+func (s *Service) publishStatus(deploymentId, status, errMessage string) {
+	ctx, cancel := context.WithTimeout(context.Background(), logPublishTimeout)
+	defer cancel()
+
+	msg := statusMessage{
+		Event:  EventStatus,
+		Status: status,
+		Error:  errMessage,
+		At:     time.Now().UTC().Format(time.RFC3339Nano),
+	}
+
+	if err := s.centrifugo.Publish(ctx, centrifugo.DeploymentChannel(deploymentId), msg); err != nil {
+		s.logger.Warn("could not publish the deployment status",
+			slog.String("deployment_id", deploymentId),
+			slog.String("status", status),
+			slog.String("error", err.Error()),
+		)
+	}
+}
+
 // publishSystemLine ek akeli line bhejta hai - wo steps jo command ke output
 // se nahi aate, jaise "cloning" ya "build failed". Ye lines db me bhi jaati
 // hain, warna failure ki wajah page refresh karte hi gayab ho jaati.
@@ -215,6 +256,7 @@ func (s *Service) publishSystemLine(deploymentId, line string) {
 	at := time.Now().UTC()
 
 	msg := logMessage{
+		Event: EventLog,
 		Type:  LogTypeSystem,
 		Lines: []string{line},
 		At:    at.Format(time.RFC3339Nano),

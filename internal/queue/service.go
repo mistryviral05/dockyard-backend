@@ -59,6 +59,7 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 	}
 
 	s.logger.Info("build started", slog.String("deployment_id", deploymentId))
+	s.publishStatus(deploymentId, deployment.StatusBuilding, "")
 	s.publishSystemLine(deploymentId, "build started, fetching your repository")
 
 	buildSource, err := s.prepareBuildSource(ctx, deploymentId)
@@ -109,6 +110,7 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 		slog.String("deployment_id", deploymentId),
 		slog.String("image_tag", imageTag),
 	)
+	s.publishStatus(deploymentId, deployment.StatusDeploying, "")
 	s.publishSystemLine(deploymentId, "image pushed, starting your app")
 
 	if err := sleep(ctx, fakeDeployDuration); err != nil {
@@ -122,6 +124,7 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 	}
 
 	s.logger.Info("deployment is running", slog.String("deployment_id", deploymentId))
+	s.publishStatus(deploymentId, deployment.StatusRunning, "")
 	s.publishSystemLine(deploymentId, "deployment is running")
 	return nil
 }
@@ -246,6 +249,8 @@ func (s *Service) markFailed(deploymentID, message string) error {
 			slog.String("error", err.Error()),
 		)
 	}
+
+	s.publishStatus(deploymentID, deployment.StatusFailed, message)
 
 	return nil
 }

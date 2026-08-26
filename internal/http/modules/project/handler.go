@@ -54,7 +54,8 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.Create(r.Context(), clerkID, &req, &req.RepositoryRequest); err != nil {
+	projectID, err := h.service.Create(r.Context(), clerkID, &req, &req.RepositoryRequest)
+	if err != nil {
 		switch {
 		case errors.Is(err, ErrWorkspaceNotFound):
 			response.NotFound(w, "workspace not found")
@@ -76,9 +77,13 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.Info("project created",
 		slog.String("clerk_id", clerkID),
+		slog.String("project_id", projectID),
 		slog.String("project_name", req.Name),
 	)
-	response.WriteJson(w, http.StatusCreated, response.GeneralMessage("Project is created successfully"))
+	response.WriteJson(w, http.StatusCreated, response.GeneralData(&CreateProjectResponse{
+		Id:   projectID,
+		Name: req.Name,
+	}))
 }
 
 func (h *Handler) SetAgent(w http.ResponseWriter, r *http.Request) {
