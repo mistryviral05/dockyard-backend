@@ -67,6 +67,35 @@ func (s *Service) Create(ctx context.Context, clerkID string, req *CreateProject
 	return tx.Commit()
 }
 
+// SetAgent project ka agent set ya badalta hai aur naya detail wapas deta
+// hai, taki frontend ko dobara fetch na karna pade.
+//
+// Ownership check aur write ek hi transaction me hain, warna check aur
+// insert ke beech me agent delete ho sakta hai.
+func (s *Service) SetAgent(ctx context.Context, clerkID, projectID, agentID string) (*ProjectDetailDto, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	txRepo := s.repo.WithTx(tx)
+
+	if err := txRepo.CheckOwnership(ctx, projectID, agentID, clerkID); err != nil {
+		return nil, err
+	}
+
+	if err := txRepo.ReplaceAgent(ctx, projectID, agentID); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return s.GetByID(ctx, clerkID, projectID)
+}
+
 // GetByID project detail page ka data banata hai. Jo bhi block DB me nahi
 // mila wo JSON me null jaata hai, khali object nahi, taki frontend seedha
 // null check kar sake.

@@ -31,6 +31,10 @@ type ProjectDto struct {
 	DeploymentStatus *string `json:"deployment_status"`
 }
 
+type SetAgentRequest struct {
+	AgentId string `json:"agent_id" validate:"required,max=64"`
+}
+
 // ProjectDetailDto project page ka poora data ek call me deta hai.
 // repository, agent aur last_deployment null ho sakte hain: agent tab tak
 // null rehta hai jab tak user use choose nahi karta, aur last_deployment

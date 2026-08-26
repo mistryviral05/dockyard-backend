@@ -14,6 +14,7 @@ var (
 	ErrInstallationNotFound = errors.New("github installation not found")
 	ErrRepoAlreadyLinked    = errors.New("this repository is already linked to a project")
 	ErrProjectNotFound      = errors.New("project not found")
+	ErrAgentNotFound        = errors.New("agent not found")
 )
 
 type Repository interface {
@@ -21,6 +22,8 @@ type Repository interface {
 	CreateRepository(ctx context.Context, dto *CreateRepositoryDto) error
 	GetByClerkId(ctx context.Context, clerkID, workspaceID string) ([]*Project, error)
 	GetDetailByID(ctx context.Context, projectID, clerkID string) (*ProjectDetail, error)
+	CheckOwnership(ctx context.Context, projectID, agentID, clerkID string) error
+	ReplaceAgent(ctx context.Context, projectID, agentID string) error
 	WithTx(db postgres.DBTX) Repository
 }
 
@@ -147,6 +150,58 @@ func (r *repository) GetDetailByID(ctx context.Context, projectID, clerkID strin
 	}
 
 	return &p, nil
+}
+
+// CheckOwnership dekhta hai ki project aur agent dono isi clerk user ke
+// hain. Dono ko ek hi roundtrip me poochha jaata hai, par error alag alag
+// aata hai taki user ko sahi message mile.
+func (r *repository) CheckOwnership(ctx context.Context, projectID, agentID, clerkID string) error {
+	var projectOk, agentOk bool
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT
+			EXISTS (
+				SELECT 1 FROM projects p
+				JOIN workspaces w ON w.id = p.wsp_id
+				JOIN users u ON u.id = w.user_id
+				WHERE p.id = $1 AND u.clerk_id = $3
+			),
+			EXISTS (
+				SELECT 1 FROM agents a
+				JOIN users u ON u.id = a.user_id
+				WHERE a.id = $2 AND u.clerk_id = $3
+			)
+	`, projectID, agentID, clerkID).Scan(&projectOk, &agentOk)
+
+	if err != nil {
+		return err
+	}
+	if !projectOk {
+		return ErrProjectNotFound
+	}
+	if !agentOk {
+		return ErrAgentNotFound
+	}
+
+	return nil
+}
+
+// ReplaceAgent project pe ek hi agent rehne deta hai. project_agent ka PK
+// (project_id, agent_id) hai, isliye sirf insert karne se purani row bachi
+// reh jaati aur deploy kisi aur agent pe chala jaata. Pehle delete, phir
+// insert. Isko transaction ke andar hi call karna hai.
+func (r *repository) ReplaceAgent(ctx context.Context, projectID, agentID string) error {
+	if _, err := r.db.ExecContext(ctx, `
+		DELETE FROM project_agent WHERE project_id = $1
+	`, projectID); err != nil {
+		return err
+	}
+
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO project_agent (project_id, agent_id) VALUES ($1, $2)
+	`, projectID, agentID)
+
+	return err
 }
 
 // CreateRepository links the github repo to the project, resolving the
