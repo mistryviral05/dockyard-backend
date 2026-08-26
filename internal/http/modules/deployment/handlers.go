@@ -45,7 +45,8 @@ func (h *Handler) Deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.CreateManual(r.Context(), clerkID, projectID, req.Branch); err != nil {
+	deploymentID, err := h.service.CreateManual(r.Context(), clerkID, projectID, req.Branch)
+	if err != nil {
 		switch {
 		case errors.Is(err, ErrProjectNotFound):
 			response.NotFound(w, "project not found")
@@ -67,10 +68,14 @@ func (h *Handler) Deploy(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("deployment created",
 		slog.String("clerk_id", clerkID),
 		slog.String("project_id", projectID),
+		slog.String("deployment_id", deploymentID),
 	)
 
 	// 202: the work has started, it is not finished
-	response.WriteJson(w, http.StatusAccepted, response.GeneralMessage("Deployment started"))
+	response.WriteJson(w, http.StatusAccepted, response.GeneralData(&DeployResponse{
+		DeploymentId: deploymentID,
+		Status:       StatusQueued,
+	}))
 }
 
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {

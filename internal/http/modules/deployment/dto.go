@@ -17,6 +17,14 @@ type DeployRequest struct {
 	Branch string `json:"branch"`
 }
 
+// DeployResponse deploy ke baad frontend ko deployment page pe bhejne ke
+// liye id deta hai. Status is point pe hamesha queued hota hai, baaki
+// detail GET /deployments/{id} se aati hai.
+type DeployResponse struct {
+	DeploymentId string `json:"deployment_id"`
+	Status       string `json:"status"`
+}
+
 type DeploymentResponse struct {
 	Id            string     `json:"id"`
 	ProjectId     string     `json:"project_id"`

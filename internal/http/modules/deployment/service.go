@@ -34,29 +34,31 @@ func NewService(db *sql.DB, logger *slog.Logger, repo Repository, queue Enqueuer
 	}
 }
 
-func (s *Service) CreateManual(ctx context.Context, clerkId, projectId, branch string) error {
+// CreateManual naye deployment ki id return karta hai, taki frontend deploy
+// ke turant baad us deployment ke page pe bhej sake.
+func (s *Service) CreateManual(ctx context.Context, clerkId, projectId, branch string) (string, error) {
 	// resolver called
 	ref, err := s.repo.ResolveProjectForUser(ctx, projectId, clerkId)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return ErrProjectNotFound
+			return "", ErrProjectNotFound
 		}
-		return err
+		return "", err
 	}
 
 	// checking agent
 	if !ref.AgentId.Valid {
-		return ErrAgentNotSet
+		return "", ErrAgentNotSet
 	}
 
 	// if any deployment is going to the running ?
 	active, err := s.repo.HasActiveDeployment(ctx, projectId)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if active {
-		return ErrDeployInProgress
+		return "", ErrDeployInProgress
 	}
 
 	if branch == "" {
@@ -74,24 +76,24 @@ func (s *Service) CreateManual(ctx context.Context, clerkId, projectId, branch s
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer tx.Rollback()
 	repo := s.repo.WithTx(tx)
 	if err := repo.Create(ctx, d); err != nil {
-		return err
+		return "", err
 	}
 	if _, err := repo.Transition(ctx, d.DeploymentId, StatusQueued, nil); err != nil {
-		return err
+		return "", err
 	}
 	if err := tx.Commit(); err != nil {
-		return err
+		return "", err
 	}
 	if err := s.queue.EnqueueBuild(ctx, d.DeploymentId); err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return d.DeploymentId, nil
 
 }
 
