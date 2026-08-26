@@ -1,11 +1,18 @@
 APP=dockyard
 
-# --- Database / migrations ---
-# Override per environment: make migrate-up DB_URL="postgres://..."
-# On a MySQL move: point MIGRATIONS_DIR at db/migrations/mysql and swap DB_URL —
-# no other changes needed.
-DB_URL?=postgres://postgres:password@localhost:5432/dockyard?sslmode=disable
-MIGRATIONS_DIR=db/migrations/postgres
+# Database migrations.
+#
+# These run through ./cmd/migrate, which embeds the golang-migrate library, so
+# there is no CLI to install. The connection details come from the same config
+# the server uses, so there is no second copy of the credentials either.
+#
+# Point at another environment with CONFIG:
+#   make migrate-up CONFIG=./config/production.env
+# Leave CONFIG empty to read everything from environment variables:
+#   make migrate-up CONFIG=
+CONFIG?=./config/development.env
+MIGRATIONS_DIR?=db/migrations/postgres
+MIGRATE=go run ./cmd/migrate --path $(MIGRATIONS_DIR) $(if $(CONFIG),--config $(CONFIG),)
 
 build:
 	@go build -o bin/$(APP) ./cmd/$(APP)/main.go
@@ -23,28 +30,32 @@ run-worker:
 run-ping:
 	@go run ./cmd/ping/main.go --config ./config/development.env
 
-# Create a new empty migration pair: make migrate-create name=add_something
+# Write a new empty migration pair: make migrate-create name=add_something
 migrate-create:
-	@migrate create -ext sql -dir $(MIGRATIONS_DIR) -seq $(name)
+	@$(MIGRATE) create $(name)
 
-# Apply all pending up migrations
+# Apply every pending migration
 migrate-up:
-	@migrate -path $(MIGRATIONS_DIR) -database "$(DB_URL)" up
+	@$(MIGRATE) up
 
-# Roll back the most recent migration
+# Roll back the most recent migration, or N of them: make migrate-down n=3
 migrate-down:
-	@migrate -path $(MIGRATIONS_DIR) -database "$(DB_URL)" down 1
+	@$(MIGRATE) down $(or $(n),1)
 
 # Roll back everything
 migrate-down-all:
-	@migrate -path $(MIGRATIONS_DIR) -database "$(DB_URL)" down -all
+	@$(MIGRATE) down all
 
-# Show current migration version
+# Move straight to a version: make migrate-goto version=5
+migrate-goto:
+	@$(MIGRATE) goto $(version)
+
+# Show the version the database is on
 migrate-version:
-	@migrate -path $(MIGRATIONS_DIR) -database "$(DB_URL)" version
+	@$(MIGRATE) version
 
 # Recover from a dirty state: make migrate-force version=N
 migrate-force:
-	@migrate -path $(MIGRATIONS_DIR) -database "$(DB_URL)" force $(version)
+	@$(MIGRATE) force $(version)
 
-.PHONY: run migrate-create migrate-up migrate-down migrate-down-all migrate-version migrate-force run-worker run-ping build start
+.PHONY: run migrate-create migrate-up migrate-down migrate-down-all migrate-goto migrate-version migrate-force run-worker run-ping build start
