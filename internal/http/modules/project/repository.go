@@ -13,12 +13,14 @@ var (
 	ErrWorkspaceNotFound    = errors.New("workspace not found")
 	ErrInstallationNotFound = errors.New("github installation not found")
 	ErrRepoAlreadyLinked    = errors.New("this repository is already linked to a project")
+	ErrProjectNotFound      = errors.New("project not found")
 )
 
 type Repository interface {
 	Create(ctx context.Context, dto *CreateProjectDto) (string, error)
 	CreateRepository(ctx context.Context, dto *CreateRepositoryDto) error
 	GetByClerkId(ctx context.Context, clerkID, workspaceID string) ([]*Project, error)
+	GetDetailByID(ctx context.Context, projectID, clerkID string) (*ProjectDetail, error)
 	WithTx(db postgres.DBTX) Repository
 }
 
@@ -95,6 +97,56 @@ func (r *repository) GetByClerkId(ctx context.Context, clerkID, workspaceID stri
 	}
 
 	return projects, nil
+}
+
+// GetDetailByID ek project ka poora detail deta hai: repo, uska sabse naya
+// agent aur sabse naya deployment. project_agent ka PK (project_id, agent_id)
+// hai, isliye ek project pe ek se zyada row ho sakti hai. Yahan sabse naya
+// hi liya jaata hai, bilkul waise jaise deploy ka resolver leta hai.
+func (r *repository) GetDetailByID(ctx context.Context, projectID, clerkID string) (*ProjectDetail, error) {
+	var p ProjectDetail
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT
+			p.id, p.project_name, p.project_stack, p.default_branch, p.is_deployed, p.created_at,
+			r.repo_name, r.repo_full_name, r.repo_url, r.is_private,
+			a.id, a.agent_name, a.status, a.port,
+			d.id, d.status, d.branch, d.created_at
+		FROM projects p
+		JOIN workspaces w ON w.id = p.wsp_id
+		JOIN users u ON u.id = w.user_id
+		LEFT JOIN repositories r ON r.project_id = p.id
+		LEFT JOIN LATERAL (
+			SELECT ag.id, ag.agent_name, ag.status, ag.port
+			FROM project_agent pa
+			JOIN agents ag ON ag.id = pa.agent_id
+			WHERE pa.project_id = p.id
+			ORDER BY pa.created_at DESC
+			LIMIT 1
+		) a ON true
+		LEFT JOIN LATERAL (
+			SELECT dp.id, dp.status, dp.branch, dp.created_at
+			FROM deployments dp
+			WHERE dp.project_id = p.id
+			ORDER BY dp.created_at DESC
+			LIMIT 1
+		) d ON true
+		WHERE p.id = $1 AND u.clerk_id = $2
+	`, projectID, clerkID).Scan(
+		&p.Id, &p.ProjectName, &p.ProjectStack, &p.DefaultBranch, &p.IsDeployed, &p.CreatedAt,
+		&p.RepoName, &p.RepoFullName, &p.RepoUrl, &p.RepoIsPrivate,
+		&p.AgentId, &p.AgentName, &p.AgentStatus, &p.AgentPort,
+		&p.DeploymentId, &p.DeploymentStatus, &p.DeploymentBranch, &p.DeploymentCreatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, err
+	}
+
+	return &p, nil
 }
 
 // CreateRepository links the github repo to the project, resolving the

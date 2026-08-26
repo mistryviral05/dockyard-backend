@@ -1,5 +1,7 @@
 package project
 
+import "time"
+
 type CreateProjectRequest struct {
 	Name        string `json:"project_name" validate:"required,min=2,max=255"`
 	Stack       string `json:"project_stack" validate:"required,oneof=nextjs nodejs react go fastapi python django express"`
@@ -27,6 +29,44 @@ type ProjectDto struct {
 	Stack            string  `json:"project_stack"`
 	RepoName         string  `json:"repo_name"`
 	DeploymentStatus *string `json:"deployment_status"`
+}
+
+// ProjectDetailDto project page ka poora data ek call me deta hai.
+// repository, agent aur last_deployment null ho sakte hain: agent tab tak
+// null rehta hai jab tak user use choose nahi karta, aur last_deployment
+// pehle deploy se pehle null hi hota hai.
+type ProjectDetailDto struct {
+	Id            string    `json:"id"`
+	Name          string    `json:"project_name"`
+	Stack         string    `json:"project_stack"`
+	DefaultBranch string    `json:"default_branch"`
+	IsDeployed    bool      `json:"is_deployed"`
+	CreatedAt     time.Time `json:"created_at"`
+
+	Repository     *RepositoryDto     `json:"repository"`
+	Agent          *ProjectAgentDto   `json:"agent"`
+	LastDeployment *LastDeploymentDto `json:"last_deployment"`
+}
+
+type RepositoryDto struct {
+	RepoName     string `json:"repo_name"`
+	RepoFullName string `json:"repo_full_name"`
+	RepoUrl      string `json:"repo_url"`
+	IsPrivate    bool   `json:"is_private"`
+}
+
+type ProjectAgentDto struct {
+	Id     string `json:"id"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Port   string `json:"port"`
+}
+
+type LastDeploymentDto struct {
+	Id        string    `json:"id"`
+	Status    string    `json:"status"`
+	Branch    string    `json:"branch"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type CreateProjectDto struct {

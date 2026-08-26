@@ -81,6 +81,38 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	response.WriteJson(w, http.StatusCreated, response.GeneralMessage("Project is created successfully"))
 }
 
+func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
+
+	clerkID, ok := middleware.ClerkIDFromContext(r.Context())
+	if !ok || clerkID == "" {
+		response.Unauthorized(w, "unauthorized")
+		return
+	}
+
+	projectID := r.PathValue("id")
+	if projectID == "" {
+		response.BadRequest(w, "project id is required")
+		return
+	}
+
+	project, err := h.service.GetByID(r.Context(), clerkID, projectID)
+	if err != nil {
+		if errors.Is(err, ErrProjectNotFound) {
+			response.NotFound(w, "project not found")
+			return
+		}
+		h.logger.Error("failed to get project",
+			slog.String("clerk_id", clerkID),
+			slog.String("project_id", projectID),
+			slog.String("error", err.Error()),
+		)
+		response.InternalError(w, "failed to get project, please try again")
+		return
+	}
+
+	response.WriteJson(w, http.StatusOK, response.GeneralData(project))
+}
+
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	clerkID, ok := middleware.ClerkIDFromContext(r.Context())

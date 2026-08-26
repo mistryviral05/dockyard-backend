@@ -67,6 +67,54 @@ func (s *Service) Create(ctx context.Context, clerkID string, req *CreateProject
 	return tx.Commit()
 }
 
+// GetByID project detail page ka data banata hai. Jo bhi block DB me nahi
+// mila wo JSON me null jaata hai, khali object nahi, taki frontend seedha
+// null check kar sake.
+func (s *Service) GetByID(ctx context.Context, clerkID, projectID string) (*ProjectDetailDto, error) {
+	p, err := s.repo.GetDetailByID(ctx, projectID, clerkID)
+	if err != nil {
+		return nil, err
+	}
+
+	dto := &ProjectDetailDto{
+		Id:            p.Id,
+		Name:          p.ProjectName.String,
+		Stack:         p.ProjectStack.String,
+		DefaultBranch: p.DefaultBranch,
+		IsDeployed:    p.IsDeployed,
+		CreatedAt:     p.CreatedAt,
+	}
+
+	if p.RepoFullName.Valid {
+		dto.Repository = &RepositoryDto{
+			RepoName:     p.RepoName.String,
+			RepoFullName: p.RepoFullName.String,
+			RepoUrl:      p.RepoUrl.String,
+			IsPrivate:    p.RepoIsPrivate.Bool,
+		}
+	}
+
+	if p.AgentId.Valid {
+		dto.Agent = &ProjectAgentDto{
+			Id:     p.AgentId.String,
+			Name:   p.AgentName.String,
+			Status: p.AgentStatus.String,
+			Port:   p.AgentPort.String,
+		}
+	}
+
+	if p.DeploymentId.Valid {
+		dto.LastDeployment = &LastDeploymentDto{
+			Id:        p.DeploymentId.String,
+			Status:    p.DeploymentStatus.String,
+			Branch:    p.DeploymentBranch.String,
+			CreatedAt: p.DeploymentCreatedAt.Time,
+		}
+	}
+
+	return dto, nil
+}
+
 func (s *Service) Get(ctx context.Context, clerkID, workspaceID string) ([]*ProjectDto, error) {
 	projects, err := s.repo.GetByClerkId(ctx, clerkID, workspaceID)
 	if err != nil {
