@@ -3,9 +3,13 @@ package project
 import (
 	"context"
 	"database/sql"
+	"strings"
 
 	"github.com/mistryviral05/dockyard/internal/http/utils/id"
 )
+
+// Deploy p.default_branch padhta hai, isliye ye kabhi khali nahi jaana chahiye.
+const defaultBranch = "main"
 
 type Service struct {
 	db   *sql.DB
@@ -27,27 +31,34 @@ func (s *Service) Create(ctx context.Context, clerkID string, req *CreateProject
 
 	txRepo := s.repo.WithTx(tx)
 
+	branch := strings.TrimSpace(repo.DefaultBranch)
+	if branch == "" {
+		branch = defaultBranch
+	}
+
 	projectId, err := txRepo.Create(ctx, &CreateProjectDto{
-		ClerkId:     clerkID,
-		ProjectId:   id.ProjectID(),
-		WorkspaceId: req.WorkspaceId,
-		Name:        req.Name,
-		Stack:       req.Stack,
+		ClerkId:       clerkID,
+		ProjectId:     id.ProjectID(),
+		WorkspaceId:   req.WorkspaceId,
+		Name:          req.Name,
+		Stack:         req.Stack,
+		DefaultBranch: branch,
 	})
 	if err != nil {
 		return err
 	}
 
 	err = txRepo.CreateRepository(ctx, &CreateRepositoryDto{
-		ClerkId:      clerkID,
-		RepositoryId: id.RepositoryID(),
-		ProjectId:    projectId,
-		RepoOwner:    repo.RepoOwner,
-		GithubRepoId: repo.GithubRepoId,
-		RepoName:     repo.RepoName,
-		RepoFullName: repo.RepoFullName,
-		RepoUrl:      repo.RepoUrl,
-		IsPrivate:    repo.IsPrivate,
+		ClerkId:       clerkID,
+		RepositoryId:  id.RepositoryID(),
+		ProjectId:     projectId,
+		RepoOwner:     repo.RepoOwner,
+		GithubRepoId:  repo.GithubRepoId,
+		RepoName:      repo.RepoName,
+		RepoFullName:  repo.RepoFullName,
+		RepoUrl:       repo.RepoUrl,
+		IsPrivate:     repo.IsPrivate,
+		DefaultBranch: branch,
 	})
 	if err != nil {
 		return err

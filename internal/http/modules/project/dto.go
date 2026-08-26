@@ -15,6 +15,10 @@ type RepositoryRequest struct {
 	RepoUrl      string `json:"repo_url" validate:"required,url,max=2048"`
 	RepoOwner    string `json:"repo_owner" validate:"required,max=255"`
 	IsPrivate    bool   `json:"is_private"`
+
+	// Repo ka default branch. Khali aaya to service "main" maan leta hai,
+	// isliye frontend me branch selector aane tak ye optional hi rahega.
+	DefaultBranch string `json:"default_branch" validate:"omitempty,max=255"`
 }
 
 type ProjectDto struct {
@@ -26,21 +30,23 @@ type ProjectDto struct {
 }
 
 type CreateProjectDto struct {
-	ClerkId     string
-	ProjectId   string
-	WorkspaceId string
-	Name        string
-	Stack       string
+	ClerkId       string
+	ProjectId     string
+	WorkspaceId   string
+	Name          string
+	Stack         string
+	DefaultBranch string
 }
 
 type CreateRepositoryDto struct {
-	ClerkId      string
-	RepositoryId string
-	ProjectId    string
-	RepoOwner    string
-	GithubRepoId string
-	RepoName     string
-	RepoFullName string
-	RepoUrl      string
-	IsPrivate    bool
+	ClerkId       string
+	RepositoryId  string
+	ProjectId     string
+	RepoOwner     string
+	GithubRepoId  string
+	RepoName      string
+	RepoFullName  string
+	RepoUrl       string
+	IsPrivate     bool
+	DefaultBranch string
 }
