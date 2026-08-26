@@ -18,16 +18,6 @@ func NewHandlers(logger *slog.Logger, service *Service) *Handlers {
 	return &Handlers{logger: logger, service: service}
 }
 
-func (h *Handlers) HandleDebugPing(ctx context.Context, t *asynq.Task) error {
-	var p DebugPingPayload
-	if err := json.Unmarshal(t.Payload(), &p); err != nil {
-		return asynq.SkipRetry
-	}
-
-	h.logger.Info("pong", slog.String("message", p.Message))
-	return nil
-}
-
 func (h *Handlers) HandleEqueueBuild(ctx context.Context, t *asynq.Task) error {
 
 	var p DeployBuildPayload
