@@ -92,13 +92,13 @@ func main() {
 		)
 		err := server.ListenAndServe()
 
-		if err != nil {
+		if err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server : %s", err.Error())
 		}
 	}()
 	<-done
 
-	logger.Info("Server is shutting down...")
+	logger.Info("Server is gracefull shutting down...")
 	ctx, cancle := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancle()
 	if err := server.Shutdown(ctx); err != nil {
