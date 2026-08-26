@@ -75,6 +75,38 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	response.WriteJson(w, http.StatusCreated, response.GeneralData(res))
 }
 
+func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
+
+	clerkID, ok := middleware.ClerkIDFromContext(r.Context())
+	if !ok || clerkID == "" {
+		response.Unauthorized(w, "unauthorized")
+		return
+	}
+
+	agentID := r.PathValue("id")
+	if agentID == "" {
+		response.BadRequest(w, "agent id is required")
+		return
+	}
+
+	agent, err := h.service.GetByID(r.Context(), clerkID, agentID)
+	if err != nil {
+		if errors.Is(err, ErrAgentNotFound) {
+			response.NotFound(w, "agent not found")
+			return
+		}
+		h.logger.Error("failed to get agent",
+			slog.String("clerk_id", clerkID),
+			slog.String("agent_id", agentID),
+			slog.String("error", err.Error()),
+		)
+		response.InternalError(w, "failed to get the agent, please try again")
+		return
+	}
+
+	response.WriteJson(w, http.StatusOK, response.GeneralData(agent))
+}
+
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	clerkID, ok := middleware.ClerkIDFromContext(r.Context())

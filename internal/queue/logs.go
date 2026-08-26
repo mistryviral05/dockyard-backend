@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/mistryviral05/dockyard/internal/http/modules/deployment"
 	"github.com/mistryviral05/dockyard/internal/http/utils/centrifugo"
 	"github.com/mistryviral05/dockyard/internal/http/utils/gh"
 )
@@ -39,11 +40,18 @@ type logStream struct {
 	channel string
 	logType string
 	logger  *slog.Logger
+	repo    deployment.Repository
 
 	deploymentId string
 	// secrets har line se hataye jaate hain: ye lines ab user ke browser me
 	// jaati hain, sirf hamare slog me nahi
 	secrets []string
+
+	// lastAt har line ko alag aur badhta hua waqt deta hai. Windows pe
+	// time.Now ki granularity milliseconds ki ho sakti hai, isliye ek hi
+	// batch ki lines same timestamp le leti aur (logged_at, id) wali
+	// ordering build ke asli kram se alag ho jaati.
+	lastAt time.Time
 }
 
 func (s *Service) newLogStream(deploymentId, logType string) *logStream {
@@ -54,6 +62,7 @@ func (s *Service) newLogStream(deploymentId, logType string) *logStream {
 		channel:      centrifugo.DeploymentChannel(deploymentId),
 		logType:      logType,
 		logger:       s.logger,
+		repo:         s.repo,
 		deploymentId: deploymentId,
 		secrets:      []string{s.registry.RegistryToken},
 	}
@@ -61,6 +70,17 @@ func (s *Service) newLogStream(deploymentId, logType string) *logStream {
 	go l.run()
 
 	return l
+}
+
+// nextAt strictly badhta hua timestamp deta hai.
+// Sirf run() goroutine se call hota hai, isliye lock ki zaroorat nahi.
+func (l *logStream) nextAt() time.Time {
+	now := time.Now().UTC()
+	if !now.After(l.lastAt) {
+		now = l.lastAt.Add(time.Microsecond)
+	}
+	l.lastAt = now
+	return now
 }
 
 // Add ek line queue karta hai. Ye kabhi block nahi karta: buffer bhar gaya to
@@ -88,7 +108,11 @@ func (l *logStream) run() {
 	ticker := time.NewTicker(logFlushInterval)
 	defer ticker.Stop()
 
+	storeTicker := time.NewTicker(logStoreFlushInterval)
+	defer storeTicker.Stop()
+
 	batch := make([]string, 0, logBatchSize)
+	store := make([]deployment.LogEntry, 0, logStoreBatchSize)
 	seq := 0
 
 	flush := func() {
@@ -100,22 +124,60 @@ func (l *logStream) run() {
 		batch = batch[:0]
 	}
 
+	flushStore := func() {
+		if len(store) == 0 {
+			return
+		}
+		l.persist(store)
+		store = store[:0]
+	}
+
 	for {
 		select {
 		case line, ok := <-l.lines:
 			if !ok {
 				flush()
+				flushStore()
 				return
 			}
+
 			batch = append(batch, line)
 			if len(batch) >= logBatchSize {
 				flush()
 			}
 
+			store = append(store, deployment.LogEntry{
+				Type:    l.logType,
+				Message: line,
+				At:      l.nextAt(),
+			})
+			if len(store) >= logStoreBatchSize {
+				flushStore()
+			}
+
 		case <-ticker.C:
 			// build ke lambe chup raaste me bhi user ko kuch dikhta rahe
 			flush()
+
+		case <-storeTicker.C:
+			flushStore()
 		}
+	}
+}
+
+// persist batch ko db me daalta hai. Publish ki tarah yahan bhi fail hona
+// build fail hona nahi hai: live logs to ja hi chuke hain, sirf history
+// adhoori rehti hai.
+func (l *logStream) persist(entries []deployment.LogEntry) {
+	ctx, cancel := context.WithTimeout(context.Background(), logStoreTimeout)
+	defer cancel()
+
+	if err := l.repo.InsertLogs(ctx, l.deploymentId, entries); err != nil {
+		l.logger.Warn("could not save the build logs",
+			slog.String("deployment_id", l.deploymentId),
+			slog.Int("lines", len(entries)),
+			slog.String("error", err.Error()),
+		)
 	}
 }
 
@@ -143,19 +205,31 @@ func (l *logStream) publish(seq int, lines []string) {
 }
 
 // publishSystemLine ek akeli line bhejta hai - wo steps jo command ke output
-// se nahi aate, jaise "cloning" ya "build failed".
+// se nahi aate, jaise "cloning" ya "build failed". Ye lines db me bhi jaati
+// hain, warna failure ki wajah page refresh karte hi gayab ho jaati.
 func (s *Service) publishSystemLine(deploymentId, line string) {
 	ctx, cancel := context.WithTimeout(context.Background(), logPublishTimeout)
 	defer cancel()
 
+	line = gh.Redact(line, s.registry.RegistryToken)
+	at := time.Now().UTC()
+
 	msg := logMessage{
 		Type:  LogTypeSystem,
-		Lines: []string{gh.Redact(line, s.registry.RegistryToken)},
-		At:    time.Now().UTC().Format(time.RFC3339Nano),
+		Lines: []string{line},
+		At:    at.Format(time.RFC3339Nano),
 	}
 
 	if err := s.centrifugo.Publish(ctx, centrifugo.DeploymentChannel(deploymentId), msg); err != nil {
 		s.logger.Warn("could not publish the deployment status line",
+			slog.String("deployment_id", deploymentId),
+			slog.String("error", err.Error()),
+		)
+	}
+
+	entries := []deployment.LogEntry{{Type: LogTypeSystem, Message: line, At: at}}
+	if err := s.repo.InsertLogs(ctx, deploymentId, entries); err != nil {
+		s.logger.Warn("could not save the deployment status line",
 			slog.String("deployment_id", deploymentId),
 			slog.String("error", err.Error()),
 		)

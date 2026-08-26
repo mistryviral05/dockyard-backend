@@ -46,3 +46,7 @@ func InstallationID() string {
 func RepositoryID() string {
 	return "repository_" + generate()
 }
+
+func LogID() string {
+	return "log_" + generate()
+}

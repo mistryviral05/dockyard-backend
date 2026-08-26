@@ -110,6 +110,45 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	response.WriteJson(w, http.StatusOK, response.GeneralData(toResponse(d)))
 }
 
+func (h *Handler) Logs(w http.ResponseWriter, r *http.Request) {
+
+	clerkID, ok := middleware.ClerkIDFromContext(r.Context())
+	if !ok || clerkID == "" {
+		response.Unauthorized(w, "unauthorized")
+		return
+	}
+
+	deploymentID := r.PathValue("id")
+	if deploymentID == "" {
+		response.BadRequest(w, "deployment id is required")
+		return
+	}
+
+	cursor := r.URL.Query().Get("cursor")
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+
+	logs, err := h.service.Logs(r.Context(), clerkID, deploymentID, cursor, limit)
+	if err != nil {
+		h.logger.Error("failed to get deployment logs",
+			slog.String("clerk_id", clerkID),
+			slog.String("deployment_id", deploymentID),
+			slog.String("error", err.Error()),
+		)
+		response.InternalError(w, "failed to get the logs, please try again")
+		return
+	}
+
+	page := &LogPage{Items: make([]*LogResponse, 0, len(logs))}
+	for _, l := range logs {
+		page.Items = append(page.Items, toLogResponse(l))
+	}
+	if len(page.Items) > 0 {
+		page.NextCursor = &page.Items[len(page.Items)-1].Id
+	}
+
+	response.WriteJson(w, http.StatusOK, response.GeneralData(page))
+}
+
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	clerkID, ok := middleware.ClerkIDFromContext(r.Context())

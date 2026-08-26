@@ -24,6 +24,20 @@ type Deployment struct {
 	UpdatedAt     time.Time
 }
 
+// LogEntry wo shape hai jo worker db me daalta hai.
+type LogEntry struct {
+	Type    string
+	Message string
+	At      time.Time
+}
+
+type DeploymentLog struct {
+	Id       string
+	LogType  string
+	Message  sql.NullString
+	LoggedAt time.Time
+}
+
 type ProjectRef struct {
 	ProjectId     string
 	UserId        string

@@ -35,3 +35,16 @@ type AgentDto struct {
 	Subdomain *string `json:"subdomain"`
 	Port      string  `json:"port"`
 }
+
+// AgentDetailDto agent page ka data hai. Token yahan kabhi nahi aata: wo
+// sirf create ke response me ek baar dikhta hai aur db me hash hi rehta hai.
+type AgentDetailDto struct {
+	Id              string     `json:"id"`
+	Name            string     `json:"name"`
+	Status          string     `json:"status"`
+	Subdomain       *string    `json:"subdomain"`
+	Port            string     `json:"port"`
+	ProjectCount    int        `json:"project_count"`
+	LastHeartbeatAt *time.Time `json:"last_heartbeat_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+}

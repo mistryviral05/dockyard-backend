@@ -53,6 +53,30 @@ func (s *Service) Create(ctx context.Context, clerkID, name, port string) (*Crea
 	}, nil
 }
 
+func (s *Service) GetByID(ctx context.Context, clerkID, agentID string) (*AgentDetailDto, error) {
+	a, err := s.repo.GetByID(ctx, agentID, clerkID)
+	if err != nil {
+		return nil, err
+	}
+
+	dto := &AgentDetailDto{
+		Id:           a.Id,
+		Name:         a.AgentName.String,
+		Status:       a.Status,
+		Port:         a.Port,
+		ProjectCount: a.ProjectCount,
+		CreatedAt:    a.CreatedAt,
+	}
+	if a.Subdomain.Valid {
+		dto.Subdomain = &a.Subdomain.String
+	}
+	if a.LastHeartbeatAt.Valid {
+		dto.LastHeartbeatAt = &a.LastHeartbeatAt.Time
+	}
+
+	return dto, nil
+}
+
 func (s *Service) Get(ctx context.Context, clerkID string) ([]*AgentDto, error) {
 	agents, err := s.repo.GetByClerkId(ctx, clerkID)
 	if err != nil {

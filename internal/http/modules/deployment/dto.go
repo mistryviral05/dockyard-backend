@@ -40,6 +40,30 @@ type DeploymentResponse struct {
 	CreatedAt     time.Time  `json:"created_at"`
 }
 
+type LogResponse struct {
+	Id       string    `json:"id"`
+	Type     string    `json:"type"`
+	Message  string    `json:"message"`
+	LoggedAt time.Time `json:"logged_at"`
+}
+
+// LogPage cursor ke saath ek page deta hai. next_cursor null aane ka matlab
+// hai ki abhi ke liye aur logs nahi hain. Deployment chal rahi ho to aage
+// ki lines Centrifugo se aayengi, dobara poll karne ki zaroorat nahi.
+type LogPage struct {
+	Items      []*LogResponse `json:"items"`
+	NextCursor *string        `json:"next_cursor"`
+}
+
+func toLogResponse(l *DeploymentLog) *LogResponse {
+	return &LogResponse{
+		Id:       l.Id,
+		Type:     l.LogType,
+		Message:  l.Message.String,
+		LoggedAt: l.LoggedAt,
+	}
+}
+
 // toResponse keeps sql.Null* out of the JSON: those marshal as
 // {"String":"","Valid":false}, which the frontend cannot use.
 func toResponse(d *Deployment) *DeploymentResponse {

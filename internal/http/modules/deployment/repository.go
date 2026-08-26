@@ -9,6 +9,7 @@ import (
 
 	"github.com/lib/pq"
 	postgres "github.com/mistryviral05/dockyard/internal/http/database"
+	"github.com/mistryviral05/dockyard/internal/http/utils/id"
 )
 
 var updatableColumns = []string{
@@ -31,6 +32,8 @@ type Repository interface {
 	ListByProject(ctx context.Context, projectID, clerkID, cursor string, limit int) ([]*Deployment, error)
 	GetBuildContext(ctx context.Context, deploymentID string) (*BuildContext, error)
 	SetCommit(ctx context.Context, deploymentID, sha, message string) error
+	InsertLogs(ctx context.Context, deploymentID string, entries []LogEntry) error
+	ListLogs(ctx context.Context, deploymentID, clerkID, cursor string, limit int) ([]*DeploymentLog, error)
 
 	WithTx(db postgres.DBTX) Repository
 }
@@ -249,6 +252,76 @@ func (r *repository) ListByProject(ctx context.Context, projectID, clerkID, curs
 	}
 
 	return deployments, nil
+}
+
+// InsertLogs ek batch ko ek hi INSERT me daalta hai. Har line pe alag query
+// bhejna build ke output ki raftaar pe DB ko bottleneck bana deta.
+//
+// logged_at caller deta hai, now() nahi, kyunki lines batch me thodi der baad
+// aati hain. Caller har line ka waqt strictly badhta hua rakhta hai, isliye
+// (logged_at, id) se ordering wahi rehti hai jo build me thi.
+func (r *repository) InsertLogs(ctx context.Context, deploymentID string, entries []LogEntry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+
+	var (
+		placeholders = make([]string, 0, len(entries))
+		args         = make([]interface{}, 0, len(entries)*5)
+	)
+
+	for i, e := range entries {
+		n := i * 5
+		placeholders = append(placeholders,
+			fmt.Sprintf("($%d, $%d, $%d::log_type, $%d, $%d)", n+1, n+2, n+3, n+4, n+5))
+		args = append(args, id.LogID(), deploymentID, e.Type, e.Message, e.At)
+	}
+
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO deployment_logs (id, deployment_id, log_type, message, logged_at)
+		VALUES `+strings.Join(placeholders, ", "), args...)
+
+	return err
+}
+
+// ListLogs purane se naye ki taraf padhta hai, kyunki log viewer upar se
+// neeche chalta hai. Cursor pichhle page ki aakhri log id hai.
+func (r *repository) ListLogs(ctx context.Context, deploymentID, clerkID, cursor string, limit int) ([]*DeploymentLog, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT l.id, l.log_type, l.message, l.logged_at
+		FROM deployment_logs l
+		JOIN deployments d   ON d.id = l.deployment_id
+		JOIN projects p      ON p.id = d.project_id
+		JOIN workspaces w    ON w.id = p.wsp_id
+		JOIN users u         ON u.id = w.user_id
+		WHERE l.deployment_id = $1
+		  AND u.clerk_id = $2
+		  AND ($3 = '' OR (l.logged_at, l.id) > (
+				SELECT c.logged_at, c.id FROM deployment_logs c WHERE c.id = $3
+		  ))
+		ORDER BY l.logged_at ASC, l.id ASC
+		LIMIT $4
+	`, deploymentID, clerkID, cursor, limit)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	logs := []*DeploymentLog{}
+	for rows.Next() {
+		var l DeploymentLog
+		if err := rows.Scan(&l.Id, &l.LogType, &l.Message, &l.LoggedAt); err != nil {
+			return nil, err
+		}
+		logs = append(logs, &l)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return logs, nil
 }
 
 type scanner interface {

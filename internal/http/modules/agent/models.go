@@ -14,4 +14,8 @@ type Agent struct {
 	Subdomain sql.NullString
 	TokenExp  sql.NullTime
 	CreatedAt time.Time
+
+	// Sirf detail query bharti hai, list me ye zero rehte hain.
+	LastHeartbeatAt sql.NullTime
+	ProjectCount    int
 }

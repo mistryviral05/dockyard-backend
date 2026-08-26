@@ -20,6 +20,13 @@ const (
 	logBufferSize = 2048
 
 	logPublishTimeout = 5 * time.Second
+
+	// DB ke liye alag aur bada batch: browser ko lines turant chahiye,
+	// disk ko nahi. Live wala har 400ms/20 lines pe jaata hai, ye har
+	// 1s/50 lines pe, taki ek build me insert bahut kam baar ho.
+	logStoreBatchSize     = 50
+	logStoreFlushInterval = time.Second
+	logStoreTimeout       = 5 * time.Second
 )
 
 // Sirf wahi entries jo build ke liye kabhi zaroori nahi hoti. dist/build aur

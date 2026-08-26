@@ -12,6 +12,10 @@ import (
 const (
 	defaultListLimit = 20
 	maxListLimit     = 100
+
+	// Ek build ki hazaaron lines ho sakti hain, isliye log page bada hai.
+	defaultLogLimit = 200
+	maxLogLimit     = 1000
 )
 
 type Enqueuer interface {
@@ -99,6 +103,20 @@ func (s *Service) CreateManual(ctx context.Context, clerkId, projectId, branch s
 
 func (s *Service) Get(ctx context.Context, clerkId, deploymentId string) (*Deployment, error) {
 	return s.repo.GetByID(ctx, deploymentId, clerkId)
+}
+
+// Logs ek deployment ke saved logs deta hai, purane se naye.
+// Ownership query me hi check hota hai, isliye kisi aur ka deployment
+// hamesha khali page deta hai.
+func (s *Service) Logs(ctx context.Context, clerkId, deploymentId, cursor string, limit int) ([]*DeploymentLog, error) {
+	if limit <= 0 {
+		limit = defaultLogLimit
+	}
+	if limit > maxLogLimit {
+		limit = maxLogLimit
+	}
+
+	return s.repo.ListLogs(ctx, deploymentId, clerkId, cursor, limit)
 }
 
 // List gives a project's deployments, newest first.

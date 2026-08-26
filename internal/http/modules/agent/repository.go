@@ -17,11 +17,13 @@ const (
 var (
 	ErrUserNotFound      = errors.New("user not found")
 	ErrAgentNameConflict = errors.New("an agent with this name already exists")
+	ErrAgentNotFound     = errors.New("agent not found")
 )
 
 type Repository interface {
 	Create(ctx context.Context, dto *CreateAgentDto) (*Agent, error)
 	GetByClerkId(ctx context.Context, clerkID string) ([]*Agent, error)
+	GetByID(ctx context.Context, agentID, clerkID string) (*Agent, error)
 	WithTx(db postgres.DBTX) Repository
 }
 
@@ -57,6 +59,33 @@ func (r *repository) Create(ctx context.Context, dto *CreateAgentDto) (*Agent, e
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
 			return nil, ErrAgentNameConflict
+		}
+		return nil, err
+	}
+
+	return &a, nil
+}
+
+// GetByID ek agent lautata hai, sirf tab jab wo isi clerk user ka ho.
+// temp_token yahan kabhi select nahi hota.
+func (r *repository) GetByID(ctx context.Context, agentID, clerkID string) (*Agent, error) {
+	var a Agent
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT a.id, a.agent_name, a.status, a.subdomain, a.port,
+		       a.last_heartbeat_at, a.created_at,
+		       (SELECT COUNT(*) FROM project_agent pa WHERE pa.agent_id = a.id)
+		FROM agents a
+		JOIN users u ON u.id = a.user_id
+		WHERE a.id = $1 AND u.clerk_id = $2
+	`, agentID, clerkID).Scan(
+		&a.Id, &a.AgentName, &a.Status, &a.Subdomain, &a.Port,
+		&a.LastHeartbeatAt, &a.CreatedAt, &a.ProjectCount,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrAgentNotFound
 		}
 		return nil, err
 	}
