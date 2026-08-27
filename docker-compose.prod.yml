@@ -1,3 +1,15 @@
+# Production stack. Postgres yahan nahi hai, wo Neon pe hai.
+# TLS host ke nginx se aata hai, isliye sab kuch sirf 127.0.0.1 pe publish hota hai.
+#
+# Images CI me banti hain aur GHCR pe jaati hain. VPS sirf pull karta hai:
+#
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# IMAGE_TAG na do to latest chalega. Rollback ke liye purana sha do:
+#
+#   IMAGE_TAG=sha-abc1234 docker compose -f docker-compose.prod.yml up -d
+
 services:
   redis:
     image: redis:7-alpine
@@ -32,11 +44,14 @@ services:
         hard: 65536
 
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
+    image: ghcr.io/mistryviral05/dockyard-api:${IMAGE_TAG:-latest}
+    # latest tag ko compose local copy samajh kar reuse kar leta hai, isliye
+    # har baar pull force karna padta hai warna deploy chupchaap purana code
+    # chalata rahega.
+    pull_policy: always
     container_name: dockyard-api
     restart: unless-stopped
+    stop_grace_period: 30s
     env_file:
       - ./config/production.env
     ports:
@@ -51,11 +66,14 @@ services:
         condition: service_started
 
   worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
+    image: ghcr.io/mistryviral05/dockyard-worker:${IMAGE_TAG:-latest}
+    pull_policy: always
     container_name: dockyard-worker
     restart: unless-stopped
+    # Deploy ke waqt koi build chal rahi ho sakti hai. Worker SIGTERM pe
+    # graceful shutdown karta hai, par nixpacks ko time chahiye. Default 10s
+    # me chalti hui deployment beech se kat jaati hai.
+    stop_grace_period: 120s
     env_file:
       - ./config/production.env
     volumes:
