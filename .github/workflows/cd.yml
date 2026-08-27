@@ -109,7 +109,7 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           script: |
             set -euo pipefail
-            cd "${{ vars.DEPLOY_PATH || '$HOME/dockyard' }}"
+            cd "${{ vars.DEPLOY_PATH || '/home/dockyard' }}"
 
             # The images are private, so the pulls below need a login first.
             # Never put the token on the command line: it would land in the
