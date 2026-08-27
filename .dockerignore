@@ -1,0 +1,18 @@
+# config me plaintext secrets hain. Ye image me kabhi nahi jaana chahiye:
+# production me config env vars se aata hai aur PEM volume se mount hota hai.
+config
+.env
+
+bin
+dist
+plans
+d.json
+
+.git
+.gitignore
+docker-compose.yml
+docker-compose.prod.yml
+Dockerfile.*
+Makefile
+api.rest
+README.md

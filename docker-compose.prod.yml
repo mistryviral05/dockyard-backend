@@ -1,0 +1,94 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: dockyard-redis
+    restart: unless-stopped
+    # Password env_file se aata hai, isliye expand container ke andar sh karta
+    # hai. Compose khud env_file ki values interpolate nahi karta.
+    command: sh -c 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"'
+    env_file:
+      - ./config/production.env
+    volumes:
+      - dockyard_redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  centrifugo:
+    image: centrifugo/centrifugo:v5
+    container_name: dockyard-centrifugo
+    restart: unless-stopped
+    # Bahar se sirf nginx aata hai, isliye localhost pe hi bind.
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./config/centrifugo.json:/centrifugo/config.json:ro
+    command: centrifugo -c config.json
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: dockyard-api
+    restart: unless-stopped
+    env_file:
+      - ./config/production.env
+    ports:
+      - "127.0.0.1:8040:8040"
+    volumes:
+      # GITHUB_PRIVATE_KEY_PATH isi folder ko point karta hai.
+      - ./config/key:/secrets:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      centrifugo:
+        condition: service_started
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: dockyard-worker
+    restart: unless-stopped
+    env_file:
+      - ./config/production.env
+    volumes:
+      # Worker apne andar daemon nahi chalata, host ka daemon use karta hai.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Zaroori: worker /tmp/dockyard/build_<id> me clone karta hai aur wahi
+      # path host ke daemon ko build context ke roop me deta hai. Ye mount na
+      # ho to daemon ko wo folder milta hi nahi aur har build fail hoti hai.
+      - /tmp:/tmp
+      - ./config/key:/secrets:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      centrifugo:
+        condition: service_started
+
+  # Queue dekhne ke liye. Default me band rehta hai:
+  #   docker compose -f docker-compose.prod.yml --profile tools up -d asynqmon
+  # Phir laptop se: ssh -L 8081:127.0.0.1:8081 user@vps
+  asynqmon:
+    image: hibiken/asynqmon
+    container_name: dockyard-asynqmon
+    restart: unless-stopped
+    env_file:
+      - ./config/production.env
+    ports:
+      - "127.0.0.1:8081:8080"
+    # REDIS_ADDR aur REDIS_PASSWORD production.env se hi mil jaate hain.
+    # Connect na ho to flags do: --redis-addr=redis:6379 --redis-password=...
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles: ["tools"]
+
+volumes:
+  dockyard_redis:

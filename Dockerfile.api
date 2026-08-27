@@ -1,0 +1,30 @@
+# API server. Ye kuch spawn nahi karta, isliye plain alpine kaafi hai.
+# Migrations yahan nahi hain: Neon bahar se reachable hai, wo local machine
+# se `make migrate-up` karke chalti hain.
+
+FROM golang:1.26 AS build
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+
+COPY . .
+
+# CGO off, warna alpine pe binary chalega hi nahi (glibc vs musl).
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
+        -o /out/api ./cmd/dockyard
+
+
+FROM alpine:3.20
+
+# Clerk, GitHub aur GHCR sab https pe hain, root certs ke bina har call fail hoti hai.
+RUN apk add --no-cache ca-certificates tzdata
+
+COPY --from=build /out/api /usr/local/bin/api
+
+EXPOSE 8040
+
+ENTRYPOINT ["/usr/local/bin/api"]

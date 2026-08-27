@@ -1,0 +1,30 @@
+# Build worker. API se alag image isliye hai ki isko git aur docker CLI
+# chahiye - dono API ke image me bekaar ka weight aur attack surface hain.
+
+FROM golang:1.26 AS build
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+
+COPY . .
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
+        -o /out/worker ./cmd/worker
+
+
+# docker:cli me docker CLI ke saath buildx plugin bhi aata hai. Daemon iske
+# andar nahi chalta - host ka daemon socket se use hota hai.
+FROM docker:27-cli
+
+# git repo clone karne ke liye, ca-certificates https clone aur GHCR push ke liye.
+RUN apk add --no-cache git ca-certificates tzdata
+
+COPY --from=build /out/worker /usr/local/bin/worker
+
+# Base image ka apna entrypoint docker daemon start karne ki koshish karta hai,
+# hume wo nahi chahiye.
+ENTRYPOINT ["/usr/local/bin/worker"]
