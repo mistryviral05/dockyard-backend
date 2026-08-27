@@ -22,6 +22,8 @@ RUN apk add --no-cache git ca-certificates tzdata
 
 COPY --from=build /out/worker /usr/local/bin/worker
 
+
+
 # Base image ka apna entrypoint docker daemon start karne ki koshish karta hai,
 # hume wo nahi chahiye.
 ENTRYPOINT ["/usr/local/bin/worker"]
