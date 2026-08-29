@@ -1,11 +1,19 @@
 FROM ubuntu:24.04
 
+ARG NIXPACKS_VERSION=1.41.0
+
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends \
+        curl \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-ENV NIXPACKS_VERSION=1.41.0
+RUN curl -fL \
+    "https://github.com/railwayapp/nixpacks/releases/download/v${NIXPACKS_VERSION}/nixpacks-v${NIXPACKS_VERSION}-amd64.deb" \
+    -o /tmp/nixpacks.deb \
+    && dpkg -i /tmp/nixpacks.deb \
+    && rm /tmp/nixpacks.deb
 
-RUN curl -sSL https://nixpacks.com/install.sh | bash
+RUN nixpacks --version
 
 ENTRYPOINT ["nixpacks"]

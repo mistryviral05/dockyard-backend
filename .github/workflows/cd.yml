@@ -83,6 +83,8 @@ jobs:
           context: build
           file: build/nixpacks.Dockerfile
           push: true
+          build-args: |
+            NIXPACKS_VERSION=${{ env.NIXPACKS_VERSION }}
           tags: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/dockyard-nixpacks:${{ env.NIXPACKS_VERSION }}
           cache-from: type=gha,scope=nixpacks
           cache-to: type=gha,mode=max,scope=nixpacks
