@@ -10,4 +10,8 @@ type BuildSource struct {
 	Commit     *gh.Commit
 	Build      *deployment.BuildContext
 	Dockerfile string
+
+	// nixpacks ke generate kiye Dockerfile ko chahiye plan variables
+	// (NIXPACKS_UV_VERSION jaise). Repo ka apna Dockerfile ho to nil.
+	BuildArgs map[string]string
 }

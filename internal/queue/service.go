@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/base32"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -71,7 +72,7 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 		return s.markFailed(deploymentId, "the build source could not be prepared")
 	}
 
-	dockerfilePath, err := s.resolveDockerfile(ctx, buildSource.Dir, deploymentId)
+	dockerfilePath, buildArgs, err := s.resolveDockerfile(ctx, buildSource.Dir, deploymentId)
 	if err != nil {
 		s.logger.Error("failed to resolve the dockerfile",
 			slog.String("deployment_id", deploymentId),
@@ -85,6 +86,7 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 		return s.markFailed(deploymentId, "the build could not be prepared")
 	}
 	buildSource.Dockerfile = dockerfilePath
+	buildSource.BuildArgs = buildArgs
 
 	s.logger.Info("Dockerfile found", slog.String("deployment_id", deploymentId), slog.String("dockerfile_path", buildSource.Dockerfile))
 
@@ -255,7 +257,9 @@ func (s *Service) markFailed(deploymentID, message string) error {
 	return nil
 }
 
-func (s *Service) resolveDockerfile(ctx context.Context, buildDir string, deploymentId string) (string, error) {
+// dusra return value sirf nixpacks wale raaste me bharta hai; repo ka apna
+// Dockerfile ho to build args ki zaroorat hi nahi.
+func (s *Service) resolveDockerfile(ctx context.Context, buildDir string, deploymentId string) (string, map[string]string, error) {
 	dockerfilePath := filepath.Join(buildDir, "Dockerfile")
 
 	info, err := os.Stat(dockerfilePath)
@@ -264,15 +268,15 @@ func (s *Service) resolveDockerfile(ctx context.Context, buildDir string, deploy
 			slog.String("deployment_id", deploymentId),
 			slog.String("path", dockerfilePath),
 		)
-		return dockerfilePath, nil
+		return dockerfilePath, nil, nil
 	}
 	if err != nil && !os.IsNotExist(err) {
-		return "", err
+		return "", nil, err
 	}
 	return s.generateDockerfile(ctx, deploymentId, buildDir)
 }
 
-func (s *Service) generateDockerfile(ctx context.Context, deploymentId string, buildDir string) (string, error) {
+func (s *Service) generateDockerfile(ctx context.Context, deploymentId string, buildDir string) (string, map[string]string, error) {
 	s.logger.Info("no Dockerfile in the repository, generating one",
 		slog.String("deployment_id", deploymentId),
 	)
@@ -296,7 +300,7 @@ func (s *Service) generateDockerfile(ctx context.Context, deploymentId string, b
 			slog.String("error", err.Error()),
 		)
 
-		return "", fmt.Errorf("%w: %s", errNoDockerfile, reason)
+		return "", nil, fmt.Errorf("%w: %s", errNoDockerfile, reason)
 	}
 
 	generated := filepath.Join(buildDir, ".nixpacks", "Dockerfile")
@@ -305,16 +309,63 @@ func (s *Service) generateDockerfile(ctx context.Context, deploymentId string, b
 			slog.String("deployment_id", deploymentId),
 			slog.String("output", string(out)),
 		)
-		return "", errNoDockerfile
+		return "", nil, errNoDockerfile
+	}
+
+	vars, err := s.nixpacksVariables(ctx, deploymentId, buildDir)
+	if err != nil {
+		return "", nil, err
 	}
 
 	s.logger.Info("dockerfile generated",
 		slog.String("deployment_id", deploymentId),
 		slog.String("path", generated),
+		slog.Int("build_args", len(vars)),
 	)
 
-	return generated, nil
+	return generated, vars, nil
 
+}
+
+
+func (s *Service) nixpacksVariables(ctx context.Context, deploymentId string, buildDir string) (map[string]string, error) {
+	args := []string{
+		"run", "--rm",
+		"-v", buildDir + ":/app",
+		"-w", "/app",
+		nixpacksImage, "plan", "/app",
+	}
+
+	// plan JSON stdout pe aata hai aur baaki shor stderr pe, isliye
+	// CombinedOutput nahi - wo JSON ko ganda kar deta.
+	out, err := exec.CommandContext(ctx, "docker", args...).Output()
+	if err != nil {
+		var stderr string
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			stderr = string(exitErr.Stderr)
+		}
+
+		s.logger.Error("nixpacks plan failed",
+			slog.String("deployment_id", deploymentId),
+			slog.String("output", stderr),
+			slog.String("error", err.Error()),
+		)
+		return nil, fmt.Errorf("nixpacks plan: %w", err)
+	}
+
+	var plan struct {
+		Variables map[string]string `json:"variables"`
+	}
+	if err := json.Unmarshal(out, &plan); err != nil {
+		s.logger.Error("nixpacks plan could not be parsed",
+			slog.String("deployment_id", deploymentId),
+			slog.String("error", err.Error()),
+		)
+		return nil, fmt.Errorf("nixpacks plan: %w", err)
+	}
+
+	return plan.Variables, nil
 }
 
 func (s *Service) imageTag(src *BuildSource) string {
@@ -425,15 +476,27 @@ func (s *Service) buildImage(ctx context.Context, deploymentId string, src *Buil
 		slog.String("image_tag", tag),
 	)
 
-	cmd := exec.CommandContext(ctx, "docker", "--config", cfgDir,
+	args := []string{
+		"--config", cfgDir,
 		"buildx", "build",
 		"--progress", "plain",
 		"--provenance=false",
+	}
+
+	// nixpacks ke Dockerfile ko plan variables chahiye. Repo ka apna Dockerfile
+	// ho to ye map nil hota hai aur loop chalta hi nahi.
+	for name, value := range src.BuildArgs {
+		args = append(args, "--build-arg", name+"="+value)
+	}
+
+	args = append(args,
 		"-f", src.Dockerfile,
 		"-t", tag,
 		"--push",
 		src.Dir,
 	)
+
+	cmd := exec.CommandContext(ctx, "docker", args...)
 
 	if err := s.stream(ctx, deploymentId, cmd); err != nil {
 		return "", err
