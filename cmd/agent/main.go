@@ -1,6 +1,11 @@
 package main
 
+import "github.com/mistryviral05/dockyard/internal/agentd"
 
 func main() {
-	// setting up agent for the creating deployments 
+	// Load the agent configuration from environment variables
+	_ = agentd.MustLoad()
+
+	// Start the agent with the loaded configuration
+
 }
