@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -28,14 +29,24 @@ type State struct {
 }
 
 
-func LoadState(path string) (*State, error) {
+func LoadState(log *slog.Logger, path string) (*State, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
+			log.Debug("state file not found, agent is unregistered",
+				slog.String("path", path),
+			)
 			return nil, nil
 		}
-		
+
 		return nil, fmt.Errorf("read state file %s: %w", path, err)
+	}
+
+	if err := CheckStatePerms(path); err != nil {
+		log.Warn("state file permissions are too open",
+			slog.String("path", path),
+			slog.String("error", err.Error()),
+		)
 	}
 
 	var s State
@@ -47,11 +58,17 @@ func LoadState(path string) (*State, error) {
 		return nil, fmt.Errorf("state file %s: %w", path, err)
 	}
 
+	log.Info("state loaded",
+		slog.String("path", path),
+		slog.String("agent_id", s.AgentID),
+		slog.Time("registered_at", s.RegisteredAt),
+	)
+
 	return &s, nil
 }
 
 
-func SaveState(path string, s *State) error {
+func SaveState(log *slog.Logger, path string, s *State) error {
 	if s == nil {
 		return errors.New("save state: nil state")
 	}
@@ -98,7 +115,6 @@ func SaveState(path string, s *State) error {
 		return fmt.Errorf("close temp state file: %w", err)
 	}
 
-	// Windows par maujood file pe rename fail hota hai, isliye pehle hata do.
 	if runtime.GOOS == "windows" {
 		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("replace state file %s: %w", path, err)
@@ -108,6 +124,11 @@ func SaveState(path string, s *State) error {
 	if err := os.Rename(tmpName, path); err != nil {
 		return fmt.Errorf("rename state file to %s: %w", path, err)
 	}
+
+	log.Info("state saved",
+		slog.String("path", path),
+		slog.String("agent_id", s.AgentID),
+	)
 
 	return nil
 }
@@ -137,7 +158,7 @@ func CheckStatePerms(path string) error {
 		}
 		return err
 	}
-	
+
 	if perm := info.Mode().Perm(); perm&0o077 != 0 {
 		return fmt.Errorf("state file %s is group/world readable (%#o), want %#o", path, perm, stateFileMode)
 	}
