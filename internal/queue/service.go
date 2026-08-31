@@ -53,7 +53,7 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 		return err
 	}
 	if !claimed {
-		// row queued me nahi hai: kisi aur ne le li, ya cancel ho chuki hai
+	
 		s.logger.Warn("build skipped, deployment is not queued",
 			slog.String("deployment_id", deploymentId),
 		)
@@ -102,8 +102,6 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 			slog.String("error", err.Error()),
 		)
 
-		// build ki apni error line mil gayi ho to wahi dikhao - "check the build
-		// logs" user ko wahin bhejta hai jahan se wo aa hi raha hai
 		message := "the image could not be built, check the build logs"
 		var failed *buildFailed
 		if errors.As(err, &failed) && failed.Reason != "" {
@@ -183,7 +181,7 @@ func (s *Service) prepareBuildSource(ctx context.Context, deploymentId string) (
 
 	buildDir, err := s.clone(ctx, buildCtx, token)
 	if err != nil {
-		// adhoora clone bhi disk pe pada reh sakta hai, caller ko cleanup ka mauka do
+	
 		return &BuildSource{Dir: buildDir}, err
 	}
 
@@ -227,9 +225,7 @@ func (s *Service) clone(ctx context.Context, b *deployment.BuildContext, token s
 	return buildDir, nil
 }
 
-// nixpacks ka Dockerfile "COPY . /app" teen baar karta hai, isliye context ka
-// har extra byte teen layers me multiply hota hai. Repo ka apna .dockerignore
-// ho to usko haath nahi lagate. Fail hone pe build rokna nahi hai.
+
 func (s *Service) writeDockerignore(deploymentId, buildDir string) {
 	path := filepath.Join(buildDir, ".dockerignore")
 
@@ -245,12 +241,11 @@ func (s *Service) writeDockerignore(deploymentId, buildDir string) {
 	}
 }
 
-// markFailed ke waqt job ka ctx mar chuka hota hai, isliye naya ctx.
 func (s *Service) markFailed(deploymentID, message string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// wahi message jo db me jaata hai, wahi live view me bhi dikhe
+
 	s.publishSystemLine(deploymentID, message)
 
 	if _, err := s.repo.Transition(ctx, deploymentID, deployment.StatusFailed, map[string]interface{}{
@@ -267,8 +262,7 @@ func (s *Service) markFailed(deploymentID, message string) error {
 	return nil
 }
 
-// dusra return value sirf nixpacks wale raaste me bharta hai; repo ka apna
-// Dockerfile ho to build args ki zaroorat hi nahi.
+
 func (s *Service) resolveDockerfile(ctx context.Context, buildDir string, deploymentId string) (string, map[string]string, error) {
 	dockerfilePath := filepath.Join(buildDir, "Dockerfile")
 
@@ -346,8 +340,7 @@ func (s *Service) nixpacksVariables(ctx context.Context, deploymentId string, bu
 		nixpacksImage, "plan", "/app",
 	}
 
-	// plan JSON stdout pe aata hai aur baaki shor stderr pe, isliye
-	// CombinedOutput nahi - wo JSON ko ganda kar deta.
+
 	out, err := exec.CommandContext(ctx, "docker", args...).Output()
 	if err != nil {
 		var stderr string
@@ -392,18 +385,13 @@ func (s *Service) imageTag(src *BuildSource) string {
 	)
 }
 
-// registry repo name sirf lowercase leta hai aur separator ke strict rules
-// rakhta hai. nanoid me uppercase, '-' aur '_' kahin bhi aa sakte hain,
-// isliye use base32-hex me encode karke safe naam banate hain.
+
 func imageName(projectId string) string {
 	enc := base32.HexEncoding.WithPadding(base32.NoPadding)
 	return "proj-" + strings.ToLower(enc.EncodeToString([]byte(projectId)))
 }
 
-// stream lines ko live bhejte hue unme se aakhri asli error line bhi uthata
-// hai. Wo line wapas isliye aati hai kyunki cmd.Wait() sirf "exit code 1"
-// batata hai - wajah sirf output me hoti hai, aur bina ise pakde user ko
-// hamesha "check the build logs" hi milta hai.
+
 func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) (string, error) {
 	pipe, err := cmd.StdoutPipe()
 	if err != nil {
@@ -415,8 +403,7 @@ func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) 
 		return "", err
 	}
 
-	// stream ke bahar nikalne se pehle bacha hua batch nikal jaana chahiye,
-	// warna failure ki aakhri lines user ko kabhi nahi dikhengi
+
 	logs := s.newLogStream(deploymentId, LogTypeBuild)
 	defer logs.Close()
 
@@ -438,7 +425,7 @@ func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) 
 			slog.String("line", line),
 		)
 
-		// aakhri wali rakhte hain: failure ke sabse kareeb wahi hoti hai
+
 		if found, ok := buildErrorLine(line); ok {
 			reason = found
 		}
@@ -447,9 +434,7 @@ func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) 
 	return reason, cmd.Wait()
 }
 
-// dockerLogin har build ke liye alag docker config folder banata hai. Global
-// ~/.docker/config.json share karne se parallel builds ek doosre ka credential
-// overwrite kar dete hain, aur ek kharab entry poori machine ke pulls tod deti hai.
+
 func (s *Service) dockerLogin(ctx context.Context, deploymentId string) (string, error) {
 	cfgDir, err := os.MkdirTemp("", "dockyard-docker-")
 	if err != nil {
@@ -504,8 +489,7 @@ func (s *Service) buildImage(ctx context.Context, deploymentId string, src *Buil
 		"--provenance=false",
 	}
 
-	// nixpacks ke Dockerfile ko plan variables chahiye. Repo ka apna Dockerfile
-	// ho to ye map nil hota hai aur loop chalta hi nahi.
+
 	for name, value := range src.BuildArgs {
 		args = append(args, "--build-arg", name+"="+value)
 	}
@@ -538,11 +522,7 @@ func nixpacksReason(out string) string {
 	return "could not detect how to build this project"
 }
 
-// buildx --progress plain har line ke aage step aur beeta hua waqt lagata hai:
-//
-//	#11 8.590 error: No interpreter found for Python 3.14
-//
-// user ko wo shor nahi chahiye.
+
 func trimBuildPrefix(line string) string {
 	if !strings.HasPrefix(line, "#") {
 		return line
@@ -564,12 +544,7 @@ func trimBuildPrefix(line string) string {
 	return rest
 }
 
-// buildErrorLine ek build line me se asli wajah nikalta hai.
-//
-// buildx aakhir me hamesha "ERROR: failed to solve: process ... exit code: 1"
-// likhta hai. Wo sirf itna kehta hai ki koi step gira - kaun sa aur kyun, ye
-// nahi. Asli line usse pehle hoti hai (jaise "error: No interpreter found for
-// Python 3.14"), isliye wrapper ko chhod dete hain.
+
 func buildErrorLine(line string) (string, bool) {
 	line = trimBuildPrefix(strings.TrimSpace(line))
 	lower := strings.ToLower(line)
