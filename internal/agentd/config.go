@@ -1,8 +1,10 @@
 package agentd
 
 import (
+	"flag"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -43,11 +45,28 @@ func MustLoad() *Config {
 	return cfg
 }
 
+
 func LoadConfig() (*Config, error) {
 	var cfg Config
 
-	if err := cleanenv.ReadEnv(&cfg); err != nil {
-		return nil, fmt.Errorf("read agent config from environment: %w", err)
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		flags := flag.String("config", "", "Path to agent config file")
+		flag.Parse()
+		configPath = *flags
+	}
+
+	if configPath == "" {
+		if err := cleanenv.ReadEnv(&cfg); err != nil {
+			return nil, fmt.Errorf("read agent config from environment: %w", err)
+		}
+	} else {
+		if _, err := os.Stat(configPath); err != nil {
+			return nil, fmt.Errorf("agent config file not readable: %w", err)
+		}
+		if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
+			return nil, fmt.Errorf("read agent config from %s: %w", configPath, err)
+		}
 	}
 
 	cfg.ControlPlaneURL = strings.TrimRight(strings.TrimSpace(cfg.ControlPlaneURL), "/")

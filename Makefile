@@ -1,4 +1,5 @@
 APP=dockyard
+AGENT_VERSION?=dev
 
 # Database migrations.
 #
@@ -11,6 +12,11 @@ APP=dockyard
 # Leave CONFIG empty to read everything from environment variables:
 #   make migrate-up CONFIG=
 CONFIG?=./config/development.env
+
+# The agent reads a different file: it runs on the user's server and has no
+# database, Clerk or GitHub credentials at all.
+AGENT_CONFIG?=./config/development.agent.env
+
 MIGRATIONS_DIR?=db/migrations/postgres
 MIGRATE=go run ./cmd/migrate --path $(MIGRATIONS_DIR) $(if $(CONFIG),--config $(CONFIG),)
 
@@ -25,6 +31,13 @@ run:
 
 run-worker:
 	@go run ./cmd/worker/main.go --config ./config/development.env
+
+run-agent:
+	@go run ./cmd/agent/main.go --config $(AGENT_CONFIG)
+
+# The agent ships as its own static binary: users download it, we do not run it.
+build-agent:
+	@go build -ldflags "-X github.com/mistryviral05/dockyard/internal/agentd.Version=$(AGENT_VERSION)" -o bin/dockyard-agent ./cmd/agent
 
 # this is only for temporary testing of ping endpoint, not for production use
 run-ping:
@@ -58,4 +71,4 @@ migrate-version:
 migrate-force:
 	@$(MIGRATE) force $(version)
 
-.PHONY: run migrate-create migrate-up migrate-down migrate-down-all migrate-goto migrate-version migrate-force run-worker run-ping build start
+.PHONY: run migrate-create migrate-up migrate-down migrate-down-all migrate-goto migrate-version migrate-force run-worker run-agent build-agent run-ping build start
