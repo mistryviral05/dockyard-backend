@@ -77,10 +77,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	errCh := make(chan error, 1)
 
 	go func() {
-		a.log.Info("agent listening",
-			slog.String("addr", a.cfg.Addr),
-			slog.String("version", Version),
-		)
+		a.log.Info("agent listening", slog.String("addr", a.cfg.Addr))
 		if err := a.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- fmt.Errorf("listen: %w", err)
 			return

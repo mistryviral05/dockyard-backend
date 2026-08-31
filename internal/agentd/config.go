@@ -34,6 +34,15 @@ type Config struct {
 	WriteTimeout time.Duration `yaml:"write_timeout" env:"DOCKYARD_WRITE_TIMEOUT" env-default:"30s"`
 	IdleTimeout  time.Duration `yaml:"idle_timeout" env:"DOCKYARD_IDLE_TIMEOUT" env-default:"60s"`
 
+	// Env log format chunta hai: development me rangeen text, production me
+	// JSON. Default production hai - user ke server pe wahi chalta hai, aur
+	// galti se colour codes journald me chale jayein usse behtar hai ki dev me
+	// ek line likhni pade.
+	Env string `yaml:"env" env:"DOCKYARD_ENV" env-default:"production"`
+
+	// LogFormat: auto | text | json. auto Env dekh kar faisla karta hai.
+	LogFormat string `yaml:"log_format" env:"DOCKYARD_LOG_FORMAT" env-default:"auto"`
+
 	LogLevel string `yaml:"log_level" env:"DOCKYARD_LOG_LEVEL" env-default:"info"`
 }
 
