@@ -1,11 +1,16 @@
 package main
 
-import "github.com/mistryviral05/dockyard/internal/agentd"
+import (
+	"log"
+
+	"github.com/mistryviral05/dockyard/internal/agentd"
+)
 
 func main() {
-	// Load the agent configuration from environment variables
-	_ = agentd.MustLoad()
+	cfg := agentd.MustLoad()
+	logger := agentd.NewLogger(cfg)
 
-	// Start the agent with the loaded configuration
-
+	if err := agentd.StartAgent(cfg, logger); err != nil {
+		log.Fatalf("agent: %s", err.Error())
+	}
 }
