@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -100,7 +101,16 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 			slog.String("deployment_id", deploymentId),
 			slog.String("error", err.Error()),
 		)
-		return s.markFailed(deploymentId, "the image could not be built, check the build logs")
+
+		// build ki apni error line mil gayi ho to wahi dikhao - "check the build
+		// logs" user ko wahin bhejta hai jahan se wo aa hi raha hai
+		message := "the image could not be built, check the build logs"
+		var failed *buildFailed
+		if errors.As(err, &failed) && failed.Reason != "" {
+			message = "the image could not be built: " + failed.Reason
+		}
+
+		return s.markFailed(deploymentId, message)
 	}
 	if _, err := s.repo.Transition(ctx, deploymentId, deployment.StatusDeploying, map[string]interface{}{
 		"image_tag": imageTag,
@@ -390,15 +400,19 @@ func imageName(projectId string) string {
 	return "proj-" + strings.ToLower(enc.EncodeToString([]byte(projectId)))
 }
 
-func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) error {
+// stream lines ko live bhejte hue unme se aakhri asli error line bhi uthata
+// hai. Wo line wapas isliye aati hai kyunki cmd.Wait() sirf "exit code 1"
+// batata hai - wajah sirf output me hoti hai, aur bina ise pakde user ko
+// hamesha "check the build logs" hi milta hai.
+func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) (string, error) {
 	pipe, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return "", err
 	}
 	cmd.Stderr = cmd.Stdout
 
 	if err := cmd.Start(); err != nil {
-		return err
+		return "", err
 	}
 
 	// stream ke bahar nikalne se pehle bacha hua batch nikal jaana chahiye,
@@ -409,10 +423,12 @@ func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) 
 	sc := bufio.NewScanner(pipe)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
+	reason := ""
+
 	for sc.Scan() {
 		if err := sc.Err(); err != nil {
 			s.logger.Error("Failed to build output :" + err.Error())
-			return err
+			return reason, err
 		}
 
 		line := sc.Text()
@@ -421,9 +437,14 @@ func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) 
 			slog.String("deployment_id", deploymentId),
 			slog.String("line", line),
 		)
+
+		// aakhri wali rakhte hain: failure ke sabse kareeb wahi hoti hai
+		if found, ok := buildErrorLine(line); ok {
+			reason = found
+		}
 	}
 
-	return cmd.Wait()
+	return reason, cmd.Wait()
 }
 
 // dockerLogin har build ke liye alag docker config folder banata hai. Global
@@ -498,8 +519,9 @@ func (s *Service) buildImage(ctx context.Context, deploymentId string, src *Buil
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
 
-	if err := s.stream(ctx, deploymentId, cmd); err != nil {
-		return "", err
+	reason, err := s.stream(ctx, deploymentId, cmd)
+	if err != nil {
+		return "", &buildFailed{Reason: reason, err: err}
 	}
 
 	return tag, nil
@@ -514,6 +536,56 @@ func nixpacksReason(out string) string {
 	}
 
 	return "could not detect how to build this project"
+}
+
+// buildx --progress plain har line ke aage step aur beeta hua waqt lagata hai:
+//
+//	#11 8.590 error: No interpreter found for Python 3.14
+//
+// user ko wo shor nahi chahiye.
+func trimBuildPrefix(line string) string {
+	if !strings.HasPrefix(line, "#") {
+		return line
+	}
+
+	_, rest, ok := strings.Cut(line, " ")
+	if !ok {
+		return line
+	}
+	rest = strings.TrimSpace(rest)
+
+	// step ke baad ka token seconds hai, warna line waise hi chhod do
+	if first, after, ok := strings.Cut(rest, " "); ok {
+		if _, err := strconv.ParseFloat(first, 64); err == nil {
+			return strings.TrimSpace(after)
+		}
+	}
+
+	return rest
+}
+
+// buildErrorLine ek build line me se asli wajah nikalta hai.
+//
+// buildx aakhir me hamesha "ERROR: failed to solve: process ... exit code: 1"
+// likhta hai. Wo sirf itna kehta hai ki koi step gira - kaun sa aur kyun, ye
+// nahi. Asli line usse pehle hoti hai (jaise "error: No interpreter found for
+// Python 3.14"), isliye wrapper ko chhod dete hain.
+func buildErrorLine(line string) (string, bool) {
+	line = trimBuildPrefix(strings.TrimSpace(line))
+	lower := strings.ToLower(line)
+
+	if !strings.HasPrefix(lower, "error:") {
+		return "", false
+	}
+	if strings.Contains(lower, "failed to solve") {
+		return "", false
+	}
+
+	if len(line) > maxFailureReason {
+		line = line[:maxFailureReason] + "..."
+	}
+
+	return line, true
 }
 func sleep(ctx context.Context, d time.Duration) error {
 	select {

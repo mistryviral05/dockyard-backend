@@ -4,6 +4,10 @@ import "time"
 
 const (
 	nixpacksImage = "dockyard/nixpacks:1.41.0"
+
+	// maxFailureReason: build ki error line seedha user ko dikhti hai aur db ke
+	// error_message me jaati hai, isliye lambi stack wali line kaat dete hain.
+	maxFailureReason = 300
 )
 
 const (
