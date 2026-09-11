@@ -78,8 +78,15 @@ type Github struct {
 	StateSecret   string `yaml:"state_secret" env:"GITHUB_STATE_SECRET" env-required:"true"`
 }
 
+// Logging dono khali chhod sakte ho - logger ENV ke hisaab se chun leta hai.
+type Logging struct {
+	Level  string `yaml:"level" env:"LOG_LEVEL"`
+	Format string `yaml:"format" env:"LOG_FORMAT"`
+}
+
 type Config struct {
 	Env               string `yaml:"env" env:"ENV" env-required:"true"`
+	Logging           `yaml:"logging"`
 	HTTPServer        `yaml:"http_server"`
 	CORS              `yaml:"cors"`
 	Clerk             `yaml:"clerk"`

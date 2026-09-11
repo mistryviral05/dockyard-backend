@@ -32,7 +32,11 @@ func main() {
 	ctx := context.Background()
 	//load the config
 	cfg := config.MustLoad()
-	logger := logger.New()
+	logger := logger.New(logger.Options{
+		Env:    cfg.Env,
+		Level:  cfg.Logging.Level,
+		Format: cfg.Logging.Format,
+	})
 
 	clerk.SetKey(cfg.Clerk.SecretKey)
 
