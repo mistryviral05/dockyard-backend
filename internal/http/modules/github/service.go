@@ -18,22 +18,24 @@ import (
 )
 
 type Service struct {
-	db     *sql.DB
-	cfg    *config.Config
-	signer *signer.Signer
-	logger *slog.Logger
-	repo   Repository
+	db       *sql.DB
+	cfg      *config.Config
+	signer   *signer.Signer
+	logger   *slog.Logger
+	repo     Repository
+	deployer Deployer
 }
 
 var ErrStateMismatch = errors.New("state does not match authenticated user")
 
-func NewService(db *sql.DB, cfg *config.Config, repo Repository, signer *signer.Signer, logger *slog.Logger) *Service {
+func NewService(db *sql.DB, cfg *config.Config, repo Repository, signer *signer.Signer, logger *slog.Logger, deployer Deployer) *Service {
 	return &Service{
-		db:     db,
-		cfg:    cfg,
-		signer: signer,
-		logger: logger,
-		repo:   repo,
+		db:       db,
+		cfg:      cfg,
+		signer:   signer,
+		logger:   logger,
+		repo:     repo,
+		deployer: deployer,
 	}
 }
 

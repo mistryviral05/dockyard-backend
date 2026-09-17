@@ -3,12 +3,12 @@ package github
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
+	gogithub "github.com/google/go-github/v66/github"
 	"github.com/mistryviral05/dockyard/internal/http/middleware"
 	"github.com/mistryviral05/dockyard/internal/http/utils/response"
 )
@@ -64,24 +64,74 @@ func (h *Handler) GetInstallations(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// HandleWebhook is the only unauthenticated route in this module. GitHub's
+// HMAC signature is what stands in for auth, so nothing is read from the body
+// until that check passes.
+//
+// Every answer except a bad signature or a broken database is 202. GitHub
+// flags a webhook as failing on non-2xx and will keep redelivering it, and a
+// push we deliberately ignored is not something a retry can improve.
 func (h *Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
-	// currently general data logs
-	var payload map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		if errors.Is(err, io.EOF) {
-			response.BadRequest(w, "request body cannot be empty")
-			return
-		}
-		h.logger.Error("failed to decode request body", slog.String("error", err.Error()))
-		response.BadRequest(w, "invalid request body")
+	payload, err := h.service.VerifyWebhook(r)
+	if err != nil {
+		h.logger.Warn("rejected github webhook", slog.String("error", err.Error()))
+		response.Unauthorized(w, "invalid webhook signature")
 		return
 	}
 
-	pretty, _ := json.MarshalIndent(payload, "", "  ")
-	fmt.Println(string(pretty))
-	h.logger.Info("webhook received", slog.String("event", r.Header.Get("x-github-event")))
-	h.logger.Info("webhook received", slog.String("signature", r.Header.Get("x-hub-signature-256")))
-	response.WriteJson(w, http.StatusAccepted, "Accepted")
+	eventType := gogithub.WebHookType(r)
+	deliveryId := gogithub.DeliveryID(r)
+
+	event, err := gogithub.ParseWebHook(eventType, payload)
+	if err != nil {
+		h.logger.Error("failed to parse github webhook",
+			slog.String("event", eventType),
+			slog.String("delivery_id", deliveryId),
+			slog.String("error", err.Error()),
+		)
+		response.BadRequest(w, "invalid webhook payload")
+		return
+	}
+
+	push, ok := event.(*gogithub.PushEvent)
+	if !ok {
+		// The app is subscribed to more than push; the rest is not acted on yet.
+		h.logger.Debug("ignored github webhook", slog.String("event", eventType))
+		response.WriteJson(w, http.StatusAccepted, response.GeneralMessage("event ignored"))
+		return
+	}
+
+	outcome, err := h.service.HandlePush(r.Context(), push, deliveryId, payload)
+	if err != nil {
+		h.logger.Error("failed to handle push webhook",
+			slog.String("delivery_id", deliveryId),
+			slog.String("repo", push.GetRepo().GetFullName()),
+			slog.String("error", err.Error()),
+		)
+		response.InternalError(w, "failed to handle webhook")
+		return
+	}
+
+	if outcome.Ignored {
+		h.logger.Info("push ignored",
+			slog.String("delivery_id", deliveryId),
+			slog.String("repo", push.GetRepo().GetFullName()),
+			slog.String("ref", push.GetRef()),
+			slog.String("reason", outcome.Reason),
+		)
+		response.WriteJson(w, http.StatusAccepted, response.GeneralMessage("push ignored: "+outcome.Reason))
+		return
+	}
+
+	h.logger.Info("deployment queued from push",
+		slog.String("delivery_id", deliveryId),
+		slog.String("repo", push.GetRepo().GetFullName()),
+		slog.String("ref", push.GetRef()),
+		slog.String("deployment_id", outcome.DeploymentId),
+	)
+	response.WriteJson(w, http.StatusAccepted, response.GeneralData(map[string]string{
+		"deployment_id": outcome.DeploymentId,
+	}))
 }
 
 func (h *Handler) CreateInstallation(w http.ResponseWriter, r *http.Request) {

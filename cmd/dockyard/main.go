@@ -55,10 +55,13 @@ func main() {
 
 	wsModule := workspace.New(db, logger)
 	userModule := user.New(db, logger, cfg, wsModule.Repo)
-	githubModule := github.New(db, cfg, logger)
 	agentModule := agent.New(db, logger)
 	projectModule := project.New(db, logger)
+
+	// Deployments are built before github: the webhook starts a deployment,
+	// so the github module needs this service handed to it.
 	deploymentModule := deployment.New(db, logger, queueClient)
+	githubModule := github.New(db, cfg, logger, deploymentModule.Service)
 	realtimeModule := realtime.New(db, cfg, logger)
 	authMW := middleware.RequireAuth(logger)
 
@@ -68,7 +71,7 @@ func main() {
 		Github:     githubModule,
 		Agent:      agentModule,
 		Project:    projectModule,
-		Deployment: deploymentModule,
+		Deployment: deploymentModule.Handler,
 		Realtime:   realtimeModule,
 		Auth:       authMW,
 	}

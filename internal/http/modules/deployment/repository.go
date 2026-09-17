@@ -27,6 +27,7 @@ type Repository interface {
 	Create(ctx context.Context, dto *CreateDeploymentDto) error
 	Transition(ctx context.Context, id, to string, extra map[string]interface{}) (bool, error)
 	ResolveProjectForUser(ctx context.Context, projectID, clerkID string) (*ProjectRef, error)
+	ResolveProject(ctx context.Context, projectID string) (*ProjectRef, error)
 	HasActiveDeployment(ctx context.Context, projectID string) (bool, error)
 	GetByID(ctx context.Context, id, clerkID string) (*Deployment, error)
 	ListByProject(ctx context.Context, projectID, clerkID, cursor string, limit int) ([]*Deployment, error)
@@ -174,6 +175,34 @@ func (r *repository) ResolveProjectForUser(ctx context.Context, projectID, clerk
 		ORDER BY pa.created_at DESC
 		LIMIT 1
 	`, projectID, clerkID).Scan(&ref.ProjectId, &ref.UserId, &ref.DefaultBranch, &ref.AgentId)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, err
+	}
+
+	return &ref, nil
+}
+
+// ResolveProject is the ownerless twin of ResolveProjectForUser. Automatic
+// deploys (a GitHub push) have no signed-in user to check against: the caller
+// has already proved the request is genuine, so the project is looked up by id
+// alone. Never expose this through an HTTP handler without an ownership check
+// of its own.
+func (r *repository) ResolveProject(ctx context.Context, projectID string) (*ProjectRef, error) {
+	var ref ProjectRef
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT p.id, w.user_id, p.default_branch, pa.agent_id
+		FROM projects p
+		JOIN workspaces w ON w.id = p.wsp_id
+		LEFT JOIN project_agent pa ON pa.project_id = p.id
+		WHERE p.id = $1
+		ORDER BY pa.created_at DESC
+		LIMIT 1
+	`, projectID).Scan(&ref.ProjectId, &ref.UserId, &ref.DefaultBranch, &ref.AgentId)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

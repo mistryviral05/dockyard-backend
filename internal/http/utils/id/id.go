@@ -50,3 +50,7 @@ func RepositoryID() string {
 func LogID() string {
 	return "log_" + generate()
 }
+
+func WebhookEventID() string {
+	return "webhook_" + generate()
+}

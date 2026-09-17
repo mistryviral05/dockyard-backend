@@ -78,6 +78,65 @@ func (s *Service) CreateManual(ctx context.Context, clerkId, projectId, branch s
 		TriggerSource: TriggerManual,
 		Branch:        branch,
 	}
+	return s.enqueue(ctx, d)
+}
+
+// CreateFromPush queues a deployment for a GitHub push. It is CreateManual
+// without the ownership check: there is no signed-in user on a webhook, and the
+// caller has already verified GitHub's signature and resolved the project from
+// a repository row we linked ourselves.
+//
+// triggered_by stays NULL on purpose — nobody clicked deploy, GitHub did.
+func (s *Service) CreateFromPush(ctx context.Context, projectId, branch, commitSha, commitMessage string) (string, error) {
+	ref, err := s.repo.ResolveProject(ctx, projectId)
+	if err != nil {
+		return "", err
+	}
+
+	if !ref.AgentId.Valid {
+		return "", ErrAgentNotSet
+	}
+
+	// A push while a build is running is dropped rather than queued. Queueing
+	// it would mean building a commit that a later push has already replaced.
+	active, err := s.repo.HasActiveDeployment(ctx, projectId)
+	if err != nil {
+		return "", err
+	}
+	if active {
+		return "", ErrDeployInProgress
+	}
+
+	if branch == "" {
+		branch = ref.DefaultBranch
+	}
+
+	d := &CreateDeploymentDto{
+		DeploymentId:  id.DeploymentID(),
+		ProjectId:     ref.ProjectId,
+		AgentId:       ref.AgentId.String,
+		TriggeredBy:   nil,
+		TriggerSource: TriggerGitHubPush,
+		Branch:        branch,
+	}
+
+	// The worker resolves the branch head itself, so these are the commit we
+	// know about now, not necessarily the one that ends up being built.
+	if commitSha != "" {
+		d.CommitSha = &commitSha
+	}
+	if commitMessage != "" {
+		d.CommitMessage = &commitMessage
+	}
+
+	return s.enqueue(ctx, d)
+}
+
+// enqueue writes the deployment row and its queued transition in one
+// transaction, then hands the id to the worker. The row must be committed
+// before the job is published, otherwise the worker can pick it up before it
+// exists.
+func (s *Service) enqueue(ctx context.Context, d *CreateDeploymentDto) (string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err
@@ -98,7 +157,6 @@ func (s *Service) CreateManual(ctx context.Context, clerkId, projectId, branch s
 	}
 
 	return d.DeploymentId, nil
-
 }
 
 func (s *Service) Get(ctx context.Context, clerkId, deploymentId string) (*Deployment, error) {

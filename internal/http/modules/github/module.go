@@ -8,10 +8,10 @@ import (
 	"github.com/mistryviral05/dockyard/internal/http/utils/signer"
 )
 
-func New(db *sql.DB, cfg *config.Config, logger *slog.Logger) *Handler {
+func New(db *sql.DB, cfg *config.Config, logger *slog.Logger, deployer Deployer) *Handler {
 	sign := signer.New(cfg.Github.StateSecret)
 	repo := NewRepository(db)
-	service := NewService(db, cfg, repo, sign,logger)
+	service := NewService(db, cfg, repo, sign, logger, deployer)
 	handler := NewHandler(service, logger)
 	return handler
 }
