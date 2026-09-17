@@ -30,7 +30,7 @@ func New(m Modules) http.Handler {
 
 	mux.HandleFunc("GET /api/helthz", func(w http.ResponseWriter, r *http.Request) {
 		response.WriteJson(w, http.StatusOK, map[string]string{
-			"status": "ok",
+			"status": "helthy",
 		})
 	})
 
