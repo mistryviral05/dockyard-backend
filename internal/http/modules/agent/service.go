@@ -12,6 +12,7 @@ import (
 const (
 	registrationTokenTTL = 15 * time.Minute
 	heartbeatIntervalSec = 30
+	offlineAfter         = 3 * heartbeatIntervalSec * time.Second
 )
 
 type Service struct {
@@ -55,6 +56,47 @@ func (s *Service) Create(ctx context.Context, clerkID, name, port string) (*Crea
 		TokenExpiresIn: int64(time.Until(created.TokenExp.Time).Seconds()),
 		RunCommand:     BuildRunCommand(plainToken, created.Port),
 	}, nil
+}
+
+func (s *Service) GetMetrics(ctx context.Context, clerkID, agentID string) (*AgentMetricsDto, error) {
+	m, err := s.repo.GetLatestMetrics(ctx, agentID, clerkID)
+	if err != nil {
+		return nil, err
+	}
+
+	dto := &AgentMetricsDto{
+		AgentID: m.AgentID,
+		Status:  m.Status,
+	}
+
+	if m.PublicIP.Valid {
+		dto.PublicIP = &m.PublicIP.String
+	}
+	if m.OSInfo.Valid {
+		dto.OSInfo = &m.OSInfo.String
+	}
+	if m.LastHeartbeatAt.Valid {
+		dto.LastHeartbeatAt = &m.LastHeartbeatAt.Time
+		dto.Live = time.Since(m.LastHeartbeatAt.Time) <= offlineAfter
+	}
+
+	if m.RecordedAt.Valid {
+		dto.Metrics = &MetricsSampleDto{
+			CPUUsage:    m.CPUUsage,
+			MemoryUsage: m.MemoryUsage,
+			DiskUsage:   m.DiskUsage,
+			Load1:       m.Load1,
+			Load5:       m.Load5,
+			Load15:      m.Load15,
+			LoadPerCore: loadPerCore(m.Load1, m.CPUCores),
+			CPUCores:    m.CPUCores,
+			UptimeSec:   m.UptimeSec,
+			RecordedAt:  m.RecordedAt.Time,
+			AgeSeconds:  int64(time.Since(m.RecordedAt.Time).Seconds()),
+		}
+	}
+
+	return dto, nil
 }
 
 func (s *Service) AuthenticateAgent(ctx context.Context, plainToken string) (string, bool, error) {

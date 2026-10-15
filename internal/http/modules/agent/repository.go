@@ -26,6 +26,7 @@ type Repository interface {
 	Create(ctx context.Context, dto *CreateAgentDto) (*Agent, error)
 	GetByClerkId(ctx context.Context, clerkID string) ([]*Agent, error)
 	GetByID(ctx context.Context, agentID, clerkID string) (*Agent, error)
+	GetLatestMetrics(ctx context.Context, agentID, clerkID string) (*AgentMetrics, error)
 	FindAgentIDByTokenHash(ctx context.Context, tokenHash string) (string, error)
 	InsertMetrics(ctx context.Context, metricID string, dto *HeartbeatDto) error
 	UpdateHeartbeat(ctx context.Context, dto *HeartbeatDto) error
@@ -95,6 +96,43 @@ func (r *repository) GetByID(ctx context.Context, agentID, clerkID string) (*Age
 	}
 
 	return &a, nil
+}
+
+func (r *repository) GetLatestMetrics(ctx context.Context, agentID, clerkID string) (*AgentMetrics, error) {
+	var m AgentMetrics
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT a.id, a.status, a.last_heartbeat_at, a.public_ip, a.os_info,
+		       m.cpu_usage, m.ram_usage, m.disk_usage,
+		       m.load_1, m.load_5, m.load_15,
+		       m.cpu_cores, m.uptime_seconds, m.recorded_at
+		FROM agents a
+		JOIN users u ON u.id = a.user_id
+		LEFT JOIN LATERAL (
+			SELECT am.cpu_usage, am.ram_usage, am.disk_usage,
+			       am.load_1, am.load_5, am.load_15,
+			       am.cpu_cores, am.uptime_seconds, am.recorded_at
+			FROM agent_metrics am
+			WHERE am.agent_id = a.id
+			ORDER BY am.recorded_at DESC
+			LIMIT 1
+		) m ON true
+		WHERE a.id = $1 AND u.clerk_id = $2
+	`, agentID, clerkID).Scan(
+		&m.AgentID, &m.Status, &m.LastHeartbeatAt, &m.PublicIP, &m.OSInfo,
+		&m.CPUUsage, &m.MemoryUsage, &m.DiskUsage,
+		&m.Load1, &m.Load5, &m.Load15,
+		&m.CPUCores, &m.UptimeSec, &m.RecordedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrAgentNotFound
+		}
+		return nil, err
+	}
+
+	return &m, nil
 }
 
 func (r *repository) FindAgentIDByTokenHash(ctx context.Context, tokenHash string) (string, error) {

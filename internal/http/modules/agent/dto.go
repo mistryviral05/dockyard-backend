@@ -94,6 +94,30 @@ type HeartbeatResponse struct {
 	HeartbeatInterval int       `json:"heartbeat_interval_seconds"`
 }
 
+type MetricsSampleDto struct {
+	CPUUsage    *float64  `json:"cpu_usage"`
+	MemoryUsage *float64  `json:"ram_usage"`
+	DiskUsage   *float64  `json:"disk_usage"`
+	Load1       *float64  `json:"load_1"`
+	Load5       *float64  `json:"load_5"`
+	Load15      *float64  `json:"load_15"`
+	LoadPerCore *float64  `json:"load_per_core"`
+	CPUCores    *int      `json:"cpu_cores"`
+	UptimeSec   *int64    `json:"uptime_seconds"`
+	RecordedAt  time.Time `json:"recorded_at"`
+	AgeSeconds  int64     `json:"age_seconds"`
+}
+
+type AgentMetricsDto struct {
+	AgentID         string            `json:"agent_id"`
+	Status          string            `json:"status"`
+	Live            bool              `json:"live"`
+	PublicIP        *string           `json:"public_ip"`
+	OSInfo          *string           `json:"os_info"`
+	LastHeartbeatAt *time.Time        `json:"last_heartbeat_at"`
+	Metrics         *MetricsSampleDto `json:"metrics"`
+}
+
 type AgentDto struct {
 	Id        string  `json:"id"`
 	Name      string  `json:"name"`

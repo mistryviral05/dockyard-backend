@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"math"
 )
 
 const (
@@ -40,6 +41,15 @@ func BuildRunCommand(token, port string) string {
 		"curl -fsSL %s/api/v1/agents/install.sh | bash -s -- --token %s --server %s --port %s",
 		serverURL, token, serverURL, port,
 	)
+}
+
+func loadPerCore(load *float64, cores *int) *float64 {
+	if load == nil || cores == nil || *cores <= 0 {
+		return nil
+	}
+
+	v := math.Round((*load / float64(*cores) * 100)) / 100
+	return &v
 }
 
 func normalizePort(p string) string {

@@ -162,6 +162,39 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	response.WriteJson(w, http.StatusOK, response.GeneralData(agent))
 }
 
+func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
+
+	clerkID, ok := middleware.ClerkIDFromContext(r.Context())
+	if !ok || clerkID == "" {
+		response.Unauthorized(w, "unauthorized")
+		return
+	}
+
+	agentID := r.PathValue("id")
+	if agentID == "" {
+		response.BadRequest(w, "agent id is required")
+		return
+	}
+
+	metrics, err := h.service.GetMetrics(r.Context(), clerkID, agentID)
+	if err != nil {
+		if errors.Is(err, ErrAgentNotFound) {
+			response.NotFound(w, "agent not found")
+			return
+		}
+		h.logger.Error("failed to get agent metrics",
+			slog.String("clerk_id", clerkID),
+			slog.String("agent_id", agentID),
+			slog.String("error", err.Error()),
+		)
+		response.InternalError(w, "failed to get agent metrics, please try again")
+		return
+	}
+
+	w.Header().Set("Cache-Control", "no-store")
+	response.WriteJson(w, http.StatusOK, response.GeneralData(metrics))
+}
+
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	clerkID, ok := middleware.ClerkIDFromContext(r.Context())
