@@ -18,12 +18,16 @@ var (
 	ErrUserNotFound      = errors.New("user not found")
 	ErrAgentNameConflict = errors.New("an agent with this name already exists")
 	ErrAgentNotFound     = errors.New("agent not found")
+	ErrAgentTokenInvalid = errors.New("agent token is invalid, revoked or expired")
 )
 
 type Repository interface {
 	Create(ctx context.Context, dto *CreateAgentDto) (*Agent, error)
 	GetByClerkId(ctx context.Context, clerkID string) ([]*Agent, error)
 	GetByID(ctx context.Context, agentID, clerkID string) (*Agent, error)
+	FindAgentIDByTokenHash(ctx context.Context, tokenHash string) (string, error)
+	InsertMetrics(ctx context.Context, metricID string, dto *HeartbeatDto) error
+	UpdateHeartbeat(ctx context.Context, dto *HeartbeatDto) error
 	WithTx(db postgres.DBTX) Repository
 }
 
@@ -38,7 +42,6 @@ func (r *repository) WithTx(db postgres.DBTX) Repository {
 func NewRepository(db postgres.DBTX) Repository {
 	return &repository{db: db}
 }
-
 
 func (r *repository) Create(ctx context.Context, dto *CreateAgentDto) (*Agent, error) {
 	var a Agent
@@ -91,6 +94,77 @@ func (r *repository) GetByID(ctx context.Context, agentID, clerkID string) (*Age
 	}
 
 	return &a, nil
+}
+
+func (r *repository) FindAgentIDByTokenHash(ctx context.Context, tokenHash string) (string, error) {
+	var agentID string
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT t.agent_id
+		FROM agent_tokens t
+		JOIN agents a ON a.id = t.agent_id
+		WHERE t.token = $1
+		  AND t.revoked_at IS NULL
+		  AND (t.expires_at IS NULL OR t.expires_at > now())
+	`, tokenHash).Scan(&agentID)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrAgentTokenInvalid
+		}
+		return "", err
+	}
+
+	return agentID, nil
+}
+
+func (r *repository) InsertMetrics(ctx context.Context, metricID string, dto *HeartbeatDto) error {
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO agent_metrics (
+			id, agent_id, cpu_usage, ram_usage, disk_usage,
+			load_1, load_5, load_15, cpu_cores, uptime_seconds, recorded_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+	`,
+		metricID, dto.AgentID, dto.CPUUsage, dto.MemoryUsage, dto.DiskUsage,
+		dto.Load1, dto.Load5, dto.Load15, dto.CPUCores, dto.UptimeSec, dto.RecordedAt,
+	)
+
+	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23503" {
+			return ErrAgentNotFound
+		}
+		return err
+	}
+
+	return nil
+}
+
+func (r *repository) UpdateHeartbeat(ctx context.Context, dto *HeartbeatDto) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE agents
+		SET last_heartbeat_at = $2,
+		    status            = 'active',
+		    public_ip         = COALESCE(NULLIF($3, ''), public_ip),
+		    os_info           = COALESCE(NULLIF($4, ''), os_info),
+		    updated_at        = now()
+		WHERE id = $1
+	`, dto.AgentID, dto.RecordedAt, dto.PublicIP, dto.OSInfo)
+
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrAgentNotFound
+	}
+
+	return nil
 }
 
 func (r *repository) GetByClerkId(ctx context.Context, clerkID string) ([]*Agent, error) {

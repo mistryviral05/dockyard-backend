@@ -25,7 +25,7 @@ func NewHandler(service *Service, logger *slog.Logger) *Handler {
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	
+
 	clerkID, ok := middleware.ClerkIDFromContext(r.Context())
 	if !ok || clerkID == "" {
 		response.Unauthorized(w, "unauthorized")

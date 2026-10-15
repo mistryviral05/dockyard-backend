@@ -11,7 +11,7 @@ import (
 
 const (
 	tokenPrefix      = "agt_"
-	tokenByteSize    = 32 
+	tokenByteSize    = 32
 	defaultAgentPort = "8999"
 
 	serverURL = "http://localhost:8080"

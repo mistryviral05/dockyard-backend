@@ -28,6 +28,41 @@ type CreateAgentResponse struct {
 	RunCommand     string    `json:"run_command"`
 }
 
+type HeartbeatRequest struct {
+	CPUUsage    *float64  `json:"cpu_usage" validate:"omitempty,gte=0,lte=100"`
+	MemoryUsage *float64  `json:"ram_usage" validate:"omitempty,gte=0,lte=100"`
+	DiskUsage   *float64  `json:"disk_usage" validate:"omitempty,gte=0,lte=100"`
+	Load1       *float64  `json:"load_1" validate:"omitempty,gte=0"`
+	Load5       *float64  `json:"load_5" validate:"omitempty,gte=0"`
+	Load15      *float64  `json:"load_15" validate:"omitempty,gte=0"`
+	CPUCores    int       `json:"cpu_cores" validate:"omitempty,gte=0,lte=4096"`
+	UptimeSec   *uint64   `json:"uptime_seconds" validate:"omitempty"`
+	OSInfo      string    `json:"os_info" validate:"omitempty,max=255"`
+	CollectedAt time.Time `json:"collected_at"`
+}
+
+type HeartbeatDto struct {
+	AgentID     string
+	PublicIP    string
+	CPUUsage    *float64
+	MemoryUsage *float64
+	DiskUsage   *float64
+	Load1       *float64
+	Load5       *float64
+	Load15      *float64
+	CPUCores    *int
+	UptimeSec   *int64
+	OSInfo      string
+	RecordedAt  time.Time
+}
+
+type HeartbeatResponse struct {
+	AgentID           string    `json:"agent_id"`
+	Status            string    `json:"status"`
+	RecordedAt        time.Time `json:"recorded_at"`
+	HeartbeatInterval int       `json:"heartbeat_interval_seconds"`
+}
+
 type AgentDto struct {
 	Id        string  `json:"id"`
 	Name      string  `json:"name"`
