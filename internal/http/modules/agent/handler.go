@@ -12,15 +12,19 @@ import (
 	"github.com/mistryviral05/dockyard/internal/http/utils/response"
 )
 
+const maxHeartbeatBody = 8 << 10
+
 type Handler struct {
-	service *Service
-	logger  *slog.Logger
+	service   *Service
+	logger    *slog.Logger
+	agentAuth func(http.Handler) http.Handler
 }
 
 func NewHandler(service *Service, logger *slog.Logger) *Handler {
 	return &Handler{
-		service: service,
-		logger:  logger,
+		service:   service,
+		logger:    logger,
+		agentAuth: middleware.RequireAgentAuth(logger, service),
 	}
 }
 
@@ -73,6 +77,57 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.Info("agent created", slog.String("agent_id", res.Id), slog.String("clerk_id", clerkID))
 	response.WriteJson(w, http.StatusCreated, response.GeneralData(res))
+}
+
+func (h *Handler) Heartbeat(w http.ResponseWriter, r *http.Request) {
+
+	agentID, ok := middleware.AgentIDFromContext(r.Context())
+	if !ok || agentID == "" {
+		response.Unauthorized(w, "unauthorized")
+		return
+	}
+
+	var req HeartbeatRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxHeartbeatBody)).Decode(&req); err != nil {
+		if errors.Is(err, io.EOF) {
+			response.BadRequest(w, "request body cannot be empty")
+			return
+		}
+		h.logger.Warn("failed to decode heartbeat body",
+			slog.String("agent_id", agentID),
+			slog.String("error", err.Error()),
+		)
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+
+	if err := validator.New().Struct(req); err != nil {
+		var ve validator.ValidationErrors
+		if errors.As(err, &ve) {
+			response.WriteJson(w, http.StatusBadRequest, response.ValidationError(ve))
+			return
+		}
+		response.BadRequest(w, "invalid request")
+		return
+	}
+
+	dto := req.ToDto(agentID, middleware.ClientIP(r))
+
+	res, err := h.service.RecordHeartbeat(r.Context(), dto)
+	if err != nil {
+		if errors.Is(err, ErrAgentNotFound) {
+			response.NotFound(w, "agent not found")
+			return
+		}
+		h.logger.Error("failed to record heartbeat",
+			slog.String("agent_id", agentID),
+			slog.String("error", err.Error()),
+		)
+		response.InternalError(w, "failed to record heartbeat, please try again")
+		return
+	}
+
+	response.WriteJson(w, http.StatusOK, response.GeneralData(res))
 }
 
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {

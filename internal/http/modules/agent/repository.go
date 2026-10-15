@@ -11,6 +11,7 @@ import (
 
 const (
 	StatusPending         = "pending"
+	StatusActive          = "active"
 	TokenTypeRegistration = "registration"
 )
 

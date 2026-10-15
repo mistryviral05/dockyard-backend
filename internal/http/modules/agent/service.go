@@ -3,12 +3,16 @@ package agent
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/mistryviral05/dockyard/internal/http/utils/id"
 )
 
-const registrationTokenTTL = 15 * time.Minute
+const (
+	registrationTokenTTL = 15 * time.Minute
+	heartbeatIntervalSec = 30
+)
 
 type Service struct {
 	db   *sql.DB
@@ -50,6 +54,51 @@ func (s *Service) Create(ctx context.Context, clerkID, name, port string) (*Crea
 		TokenExpiresAt: created.TokenExp.Time,
 		TokenExpiresIn: int64(time.Until(created.TokenExp.Time).Seconds()),
 		RunCommand:     BuildRunCommand(plainToken, created.Port),
+	}, nil
+}
+
+func (s *Service) AuthenticateAgent(ctx context.Context, plainToken string) (string, bool, error) {
+	agentID, err := s.repo.FindAgentIDByTokenHash(ctx, HashToken(plainToken))
+	if err != nil {
+		if errors.Is(err, ErrAgentTokenInvalid) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+
+	return agentID, true, nil
+}
+
+func (s *Service) RecordHeartbeat(ctx context.Context, dto *HeartbeatDto) (*HeartbeatResponse, error) {
+	if dto.RecordedAt.IsZero() {
+		dto.RecordedAt = time.Now().UTC()
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	txRepo := s.repo.WithTx(tx)
+
+	if err := txRepo.UpdateHeartbeat(ctx, dto); err != nil {
+		return nil, err
+	}
+
+	if err := txRepo.InsertMetrics(ctx, id.AgentMetricID(), dto); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &HeartbeatResponse{
+		AgentID:           dto.AgentID,
+		Status:            StatusActive,
+		RecordedAt:        dto.RecordedAt,
+		HeartbeatInterval: heartbeatIntervalSec,
 	}, nil
 }
 

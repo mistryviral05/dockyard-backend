@@ -1,6 +1,10 @@
 package agent
 
-import "time"
+import (
+	"math"
+	"strings"
+	"time"
+)
 
 type CreateAgentRequest struct {
 	Name string `json:"name" validate:"required,min=2,max=255"`
@@ -54,6 +58,33 @@ type HeartbeatDto struct {
 	UptimeSec   *int64
 	OSInfo      string
 	RecordedAt  time.Time
+}
+
+func (r *HeartbeatRequest) ToDto(agentID, publicIP string) *HeartbeatDto {
+	dto := &HeartbeatDto{
+		AgentID:     agentID,
+		PublicIP:    publicIP,
+		CPUUsage:    r.CPUUsage,
+		MemoryUsage: r.MemoryUsage,
+		DiskUsage:   r.DiskUsage,
+		Load1:       r.Load1,
+		Load5:       r.Load5,
+		Load15:      r.Load15,
+		OSInfo:      strings.TrimSpace(r.OSInfo),
+		RecordedAt:  time.Now().UTC(),
+	}
+
+	if r.CPUCores > 0 {
+		cores := r.CPUCores
+		dto.CPUCores = &cores
+	}
+
+	if r.UptimeSec != nil && *r.UptimeSec <= math.MaxInt64 {
+		uptime := int64(*r.UptimeSec)
+		dto.UptimeSec = &uptime
+	}
+
+	return dto
 }
 
 type HeartbeatResponse struct {
