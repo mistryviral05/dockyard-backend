@@ -1,10 +1,12 @@
 package agentd
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -30,6 +32,10 @@ type Config struct {
 
 	ClockSkew time.Duration `yaml:"clock_skew" env:"DOCKYARD_CLOCK_SKEW" env-default:"5m"`
 
+	MetricsEnabled bool `yaml:"metrics_enabled" env:"DOCKYARD_METRICS_ENABLED" env-default:"true"`
+
+	DiskPath string `yaml:"disk_path" env:"DOCKYARD_DISK_PATH" env-default:"/"`
+
 	ReadTimeout  time.Duration `yaml:"read_timeout" env:"DOCKYARD_READ_TIMEOUT" env-default:"10s"`
 	WriteTimeout time.Duration `yaml:"write_timeout" env:"DOCKYARD_WRITE_TIMEOUT" env-default:"30s"`
 	IdleTimeout  time.Duration `yaml:"idle_timeout" env:"DOCKYARD_IDLE_TIMEOUT" env-default:"60s"`
@@ -53,7 +59,6 @@ func MustLoad() *Config {
 	}
 	return cfg
 }
-
 
 func LoadConfig() (*Config, error) {
 	var cfg Config
@@ -79,12 +84,30 @@ func LoadConfig() (*Config, error) {
 	}
 
 	cfg.ControlPlaneURL = strings.TrimRight(strings.TrimSpace(cfg.ControlPlaneURL), "/")
+	cfg.DiskPath = resolveDiskPath(cfg.DiskPath)
 
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
 
 	return &cfg, nil
+}
+
+func resolveDiskPath(path string) string {
+	p := strings.TrimSpace(path)
+	if p == "" {
+		p = "/"
+	}
+
+	if runtime.GOOS != "windows" || p != "/" {
+		return p
+	}
+
+	if drive := os.Getenv("SystemDrive"); drive != "" {
+		return drive + `\`
+	}
+
+	return `C:\`
 }
 
 func (c *Config) validate() error {
@@ -98,6 +121,10 @@ func (c *Config) validate() error {
 
 	if c.ClockSkew <= 0 || c.ClockSkew > time.Hour {
 		return fmt.Errorf("DOCKYARD_CLOCK_SKEW must be between 0 and 1h, got %s", c.ClockSkew)
+	}
+
+	if c.MetricsEnabled && c.DiskPath == "" {
+		return errors.New("DOCKYARD_DISK_PATH must not be empty when metrics are enabled")
 	}
 
 	return nil
