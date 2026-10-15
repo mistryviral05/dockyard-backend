@@ -176,7 +176,13 @@ func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	metrics, err := h.service.GetMetrics(r.Context(), clerkID, agentID)
+	q, err := parseMetricsQuery(r.URL.Query())
+	if err != nil {
+		response.BadRequest(w, err.Error())
+		return
+	}
+
+	metrics, err := h.service.GetMetrics(r.Context(), clerkID, agentID, q)
 	if err != nil {
 		if errors.Is(err, ErrAgentNotFound) {
 			response.NotFound(w, "agent not found")

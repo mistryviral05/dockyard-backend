@@ -13,6 +13,13 @@ const (
 	registrationTokenTTL = 15 * time.Minute
 	heartbeatIntervalSec = 30
 	offlineAfter         = 3 * heartbeatIntervalSec * time.Second
+	pollSeconds          = 8
+
+	defaultWindow   = 15 * time.Minute
+	minWindow       = time.Minute
+	maxWindow       = 24 * time.Hour
+	targetPoints    = 300
+	maxSeriesPoints = 1000
 )
 
 type Service struct {
@@ -58,15 +65,25 @@ func (s *Service) Create(ctx context.Context, clerkID, name, port string) (*Crea
 	}, nil
 }
 
-func (s *Service) GetMetrics(ctx context.Context, clerkID, agentID string) (*AgentMetricsDto, error) {
+func (s *Service) GetMetrics(ctx context.Context, clerkID, agentID string, q MetricsQuery) (*AgentMetricsDto, error) {
 	m, err := s.repo.GetLatestMetrics(ctx, agentID, clerkID)
 	if err != nil {
 		return nil, err
 	}
 
+	window := clampWindow(q.Window)
+	bucket := bucketFor(window)
+
 	dto := &AgentMetricsDto{
-		AgentID: m.AgentID,
-		Status:  m.Status,
+		AgentID:       m.AgentID,
+		Name:          m.AgentName.String,
+		Status:        m.Status,
+		CPUCores:      m.CPUCores,
+		UptimeSec:     m.UptimeSec,
+		WindowSeconds: int(window.Seconds()),
+		BucketSeconds: bucket,
+		PollSeconds:   pollSeconds,
+		Series:        []*MetricPointDto{},
 	}
 
 	if m.PublicIP.Valid {
@@ -81,7 +98,7 @@ func (s *Service) GetMetrics(ctx context.Context, clerkID, agentID string) (*Age
 	}
 
 	if m.RecordedAt.Valid {
-		dto.Metrics = &MetricsSampleDto{
+		dto.Current = &MetricsSampleDto{
 			CPUUsage:    m.CPUUsage,
 			MemoryUsage: m.MemoryUsage,
 			DiskUsage:   m.DiskUsage,
@@ -89,11 +106,24 @@ func (s *Service) GetMetrics(ctx context.Context, clerkID, agentID string) (*Age
 			Load5:       m.Load5,
 			Load15:      m.Load15,
 			LoadPerCore: loadPerCore(m.Load1, m.CPUCores),
-			CPUCores:    m.CPUCores,
-			UptimeSec:   m.UptimeSec,
 			RecordedAt:  m.RecordedAt.Time,
 			AgeSeconds:  int64(time.Since(m.RecordedAt.Time).Seconds()),
 		}
+	}
+
+	points, err := s.repo.GetMetricsSeries(ctx, agentID, seriesStart(window, q.Since), bucket, maxSeriesPoints)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, p := range points {
+		dto.Series = append(dto.Series, &MetricPointDto{
+			T:    p.At.UTC(),
+			CPU:  p.CPU,
+			RAM:  p.RAM,
+			Disk: p.Disk,
+			Load: p.Load,
+		})
 	}
 
 	return dto, nil

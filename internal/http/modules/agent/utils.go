@@ -8,6 +8,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"net/url"
+	"strings"
+	"time"
 )
 
 const (
@@ -41,6 +44,57 @@ func BuildRunCommand(token, port string) string {
 		"curl -fsSL %s/api/v1/agents/install.sh | bash -s -- --token %s --server %s --port %s",
 		serverURL, token, serverURL, port,
 	)
+}
+
+func parseMetricsQuery(values url.Values) (MetricsQuery, error) {
+	var q MetricsQuery
+
+	if raw := strings.TrimSpace(values.Get("window")); raw != "" {
+		d, err := time.ParseDuration(raw)
+		if err != nil {
+			return q, fmt.Errorf("window must be a duration like 15m or 6h")
+		}
+		q.Window = d
+	}
+
+	if raw := strings.TrimSpace(values.Get("since")); raw != "" {
+		t, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return q, fmt.Errorf("since must be an RFC3339 timestamp")
+		}
+		q.Since = t.UTC()
+	}
+
+	return q, nil
+}
+
+func clampWindow(w time.Duration) time.Duration {
+	switch {
+	case w <= 0:
+		return defaultWindow
+	case w < minWindow:
+		return minWindow
+	case w > maxWindow:
+		return maxWindow
+	default:
+		return w
+	}
+}
+
+func bucketFor(window time.Duration) int {
+	bucket := int(window.Seconds()) / targetPoints
+	if bucket < 1 {
+		return 1
+	}
+	return bucket
+}
+
+func seriesStart(window time.Duration, since time.Time) time.Time {
+	oldest := time.Now().UTC().Add(-window)
+	if since.IsZero() || since.Before(oldest) {
+		return oldest
+	}
+	return since
 }
 
 func loadPerCore(load *float64, cores *int) *float64 {

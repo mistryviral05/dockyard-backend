@@ -94,6 +94,11 @@ type HeartbeatResponse struct {
 	HeartbeatInterval int       `json:"heartbeat_interval_seconds"`
 }
 
+type MetricsQuery struct {
+	Window time.Duration
+	Since  time.Time
+}
+
 type MetricsSampleDto struct {
 	CPUUsage    *float64  `json:"cpu_usage"`
 	MemoryUsage *float64  `json:"ram_usage"`
@@ -102,20 +107,35 @@ type MetricsSampleDto struct {
 	Load5       *float64  `json:"load_5"`
 	Load15      *float64  `json:"load_15"`
 	LoadPerCore *float64  `json:"load_per_core"`
-	CPUCores    *int      `json:"cpu_cores"`
-	UptimeSec   *int64    `json:"uptime_seconds"`
 	RecordedAt  time.Time `json:"recorded_at"`
 	AgeSeconds  int64     `json:"age_seconds"`
 }
 
+type MetricPointDto struct {
+	T    time.Time `json:"t"`
+	CPU  *float64  `json:"cpu"`
+	RAM  *float64  `json:"ram"`
+	Disk *float64  `json:"disk"`
+	Load *float64  `json:"load"`
+}
+
 type AgentMetricsDto struct {
-	AgentID         string            `json:"agent_id"`
-	Status          string            `json:"status"`
-	Live            bool              `json:"live"`
-	PublicIP        *string           `json:"public_ip"`
-	OSInfo          *string           `json:"os_info"`
-	LastHeartbeatAt *time.Time        `json:"last_heartbeat_at"`
-	Metrics         *MetricsSampleDto `json:"metrics"`
+	AgentID         string     `json:"agent_id"`
+	Name            string     `json:"name"`
+	Status          string     `json:"status"`
+	Live            bool       `json:"live"`
+	PublicIP        *string    `json:"public_ip"`
+	OSInfo          *string    `json:"os_info"`
+	CPUCores        *int       `json:"cpu_cores"`
+	UptimeSec       *int64     `json:"uptime_seconds"`
+	LastHeartbeatAt *time.Time `json:"last_heartbeat_at"`
+
+	Current *MetricsSampleDto `json:"current"`
+
+	Series        []*MetricPointDto `json:"series"`
+	WindowSeconds int               `json:"window_seconds"`
+	BucketSeconds int               `json:"bucket_seconds"`
+	PollSeconds   int               `json:"poll_seconds"`
 }
 
 type AgentDto struct {

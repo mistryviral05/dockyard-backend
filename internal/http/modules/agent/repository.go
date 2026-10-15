@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/lib/pq"
 	postgres "github.com/mistryviral05/dockyard/internal/http/database"
@@ -27,6 +28,7 @@ type Repository interface {
 	GetByClerkId(ctx context.Context, clerkID string) ([]*Agent, error)
 	GetByID(ctx context.Context, agentID, clerkID string) (*Agent, error)
 	GetLatestMetrics(ctx context.Context, agentID, clerkID string) (*AgentMetrics, error)
+	GetMetricsSeries(ctx context.Context, agentID string, since time.Time, bucketSeconds, limit int) ([]*MetricPoint, error)
 	FindAgentIDByTokenHash(ctx context.Context, tokenHash string) (string, error)
 	InsertMetrics(ctx context.Context, metricID string, dto *HeartbeatDto) error
 	UpdateHeartbeat(ctx context.Context, dto *HeartbeatDto) error
@@ -102,7 +104,7 @@ func (r *repository) GetLatestMetrics(ctx context.Context, agentID, clerkID stri
 	var m AgentMetrics
 
 	err := r.db.QueryRowContext(ctx, `
-		SELECT a.id, a.status, a.last_heartbeat_at, a.public_ip, a.os_info,
+		SELECT a.id, a.agent_name, a.status, a.last_heartbeat_at, a.public_ip, a.os_info,
 		       m.cpu_usage, m.ram_usage, m.disk_usage,
 		       m.load_1, m.load_5, m.load_15,
 		       m.cpu_cores, m.uptime_seconds, m.recorded_at
@@ -119,7 +121,7 @@ func (r *repository) GetLatestMetrics(ctx context.Context, agentID, clerkID stri
 		) m ON true
 		WHERE a.id = $1 AND u.clerk_id = $2
 	`, agentID, clerkID).Scan(
-		&m.AgentID, &m.Status, &m.LastHeartbeatAt, &m.PublicIP, &m.OSInfo,
+		&m.AgentID, &m.AgentName, &m.Status, &m.LastHeartbeatAt, &m.PublicIP, &m.OSInfo,
 		&m.CPUUsage, &m.MemoryUsage, &m.DiskUsage,
 		&m.Load1, &m.Load5, &m.Load15,
 		&m.CPUCores, &m.UptimeSec, &m.RecordedAt,
@@ -133,6 +135,37 @@ func (r *repository) GetLatestMetrics(ctx context.Context, agentID, clerkID stri
 	}
 
 	return &m, nil
+}
+
+func (r *repository) GetMetricsSeries(ctx context.Context, agentID string, since time.Time, bucketSeconds, limit int) ([]*MetricPoint, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT to_timestamp(floor(extract(epoch FROM recorded_at) / $3) * $3) AS bucket,
+		       avg(cpu_usage), avg(ram_usage), avg(disk_usage), avg(load_1)
+		FROM agent_metrics
+		WHERE agent_id = $1 AND recorded_at > $2
+		GROUP BY bucket
+		ORDER BY bucket
+		LIMIT $4
+	`, agentID, since, bucketSeconds, limit)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	points := []*MetricPoint{}
+	for rows.Next() {
+		var p MetricPoint
+		if err := rows.Scan(&p.At, &p.CPU, &p.RAM, &p.Disk, &p.Load); err != nil {
+			return nil, err
+		}
+		points = append(points, &p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return points, nil
 }
 
 func (r *repository) FindAgentIDByTokenHash(ctx context.Context, tokenHash string) (string, error) {
