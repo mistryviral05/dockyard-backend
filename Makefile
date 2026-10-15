@@ -43,6 +43,41 @@ build-agent:
 run-ping:
 	@go run ./cmd/ping/main.go --config ./config/development.env
 
+BENCH_HOST?=http://localhost:8040
+BENCH_AGENT?=agent_zbo6rtbamqn8niqhicfqg2ui990ujmo5
+BENCH_WINDOW?=15m
+BENCH_CONN?=50
+BENCH_DURATION?=20
+BENCH_RATE?=62
+SEED_COUNT?=50
+AGENT_TOKEN?=
+
+BENCH_URL="$(BENCH_HOST)/api/v1/agents/$(BENCH_AGENT)/metrics/bench?window=$(BENCH_WINDOW)"
+
+bench:
+	@autocannon -c $(BENCH_CONN) -d $(BENCH_DURATION) $(BENCH_URL)
+
+bench-latency:
+	@autocannon -c $(BENCH_CONN) -d $(BENCH_DURATION) -l $(BENCH_URL)
+
+bench-rate:
+	@autocannon -c 10 -R $(BENCH_RATE) -d $(BENCH_DURATION) $(BENCH_URL)
+
+bench-heavy:
+	@$(MAKE) bench BENCH_WINDOW=6h BENCH_CONN=100 BENCH_DURATION=30
+
+bench-seed:
+	@test -n "$(AGENT_TOKEN)" || { echo "AGENT_TOKEN is required: make bench-seed AGENT_TOKEN=agt_xxx"; exit 1; }
+	@echo "sending $(SEED_COUNT) heartbeats to $(BENCH_HOST)"
+	@i=1; while [ $$i -le $(SEED_COUNT) ]; do \
+		curl -s -o /dev/null -w "%{http_code} " \
+			-X POST "$(BENCH_HOST)/api/v1/agents/heartbeat" \
+			-H "Authorization: Bearer $(AGENT_TOKEN)" \
+			-H "Content-Type: application/json" \
+			-d "{\"cpu_usage\":$$(( (i * 7) % 100 )),\"ram_usage\":$$(( (i * 13) % 100 )),\"disk_usage\":49.7,\"load_1\":$$(( i % 9 )),\"load_5\":2.1,\"load_15\":1.4,\"cpu_cores\":16,\"uptime_seconds\":$$(( i * 60 )),\"os_info\":\"ubuntu 24.04 (x86_64)\"}"; \
+		i=$$(( i + 1 )); \
+	done; echo ""
+
 # Write a new empty migration pair: make migrate-create name=add_something
 migrate-create:
 	@$(MIGRATE) create $(name)
@@ -71,4 +106,4 @@ migrate-version:
 migrate-force:
 	@$(MIGRATE) force $(version)
 
-.PHONY: run migrate-create migrate-up migrate-down migrate-down-all migrate-goto migrate-version migrate-force run-worker run-agent build-agent run-ping build start
+.PHONY: run migrate-create migrate-up migrate-down migrate-down-all migrate-goto migrate-version migrate-force run-worker run-agent build-agent run-ping build start bench bench-latency bench-rate bench-heavy bench-seed

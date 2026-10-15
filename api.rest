@@ -101,3 +101,136 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 ###
+
+# ---------------------------------------------------------------- agents
+
+@agentId=agent_zbo6rtbamqn8niqhicfqg2ui990ujmo5
+@agentToken=agt_jbCM7hnH_WZzS6FWL4Q18v8UZnmRlpZWYhz_R_ZTsqg
+
+### list agents
+GET {{base}}/agents
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### single agent
+GET {{base}}/agents/{{agentId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+# ------------------------------------------------- heartbeat (agent token)
+
+### fake heartbeat - run this a few times to fill the chart
+POST {{base}}/agents/heartbeat
+Content-Type: application/json
+Authorization: Bearer {{agentToken}}
+
+{
+  "cpu_usage": 23.4,
+  "ram_usage": 71.8,
+  "disk_usage": 49.7,
+  "load_1": 1.2,
+  "load_5": 0.9,
+  "load_15": 0.7,
+  "cpu_cores": 16,
+  "uptime_seconds": 7200,
+  "os_info": "ubuntu 24.04 (x86_64)"
+}
+
+### second sample with different numbers
+POST {{base}}/agents/heartbeat
+Content-Type: application/json
+Authorization: Bearer {{agentToken}}
+
+{
+  "cpu_usage": 88.1,
+  "ram_usage": 74.2,
+  "disk_usage": 49.8,
+  "load_1": 9.6,
+  "load_5": 4.1,
+  "load_15": 2.2,
+  "cpu_cores": 16,
+  "uptime_seconds": 7260,
+  "os_info": "ubuntu 24.04 (x86_64)"
+}
+
+### partial heartbeat - only cpu, everything else stays null
+POST {{base}}/agents/heartbeat
+Content-Type: application/json
+Authorization: Bearer {{agentToken}}
+
+{
+  "cpu_usage": 5.5
+}
+
+### 401 - bad agent token
+POST {{base}}/agents/heartbeat
+Content-Type: application/json
+Authorization: Bearer agt_this_token_does_not_exist
+
+{
+  "cpu_usage": 5.5
+}
+
+### 400 - cpu out of range
+POST {{base}}/agents/heartbeat
+Content-Type: application/json
+Authorization: Bearer {{agentToken}}
+
+{
+  "cpu_usage": 999
+}
+
+# ------------------------------------------------- metrics (clerk token)
+
+### default window 15m - cards + chart series
+GET {{base}}/agents/{{agentId}}/metrics
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 1 hour window
+GET {{base}}/agents/{{agentId}}/metrics?window=1h
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 6 hour window - points get averaged into buckets
+GET {{base}}/agents/{{agentId}}/metrics?window=6h
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### poll shape - only points newer than the last one you drew
+GET {{base}}/agents/{{agentId}}/metrics?window=15m&since=2026-10-15T09:40:12Z
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 400 - bad window
+GET {{base}}/agents/{{agentId}}/metrics?window=abc
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 404 - agent that is not yours
+GET {{base}}/agents/agent_doesnotexist0000000000000000/metrics
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+# ------------------------------------------------- bench (no auth, load test only)
+
+### same query as the real endpoint, no clerk token, public_ip stripped
+GET {{base}}/agents/{{agentId}}/metrics/bench
+
+### heavier window for the load test
+GET {{base}}/agents/{{agentId}}/metrics/bench?window=6h
+
+###
+
+
+
+
+1..16 | ForEach-Object {
+  Start-Job {
+    $end = (Get-Date).AddSeconds(60)
+    while ((Get-Date) -lt $end) { $x = 1; 1..200000 | ForEach-Object { $x = $x * 1.0000001 } }
+  }
+}
+
+
+Get-Job | Stop-Job; Get-Job | Remove-Job

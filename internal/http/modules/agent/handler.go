@@ -201,6 +201,34 @@ func (h *Handler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	response.WriteJson(w, http.StatusOK, response.GeneralData(metrics))
 }
 
+func (h *Handler) GetMetricsBench(w http.ResponseWriter, r *http.Request) {
+
+	agentID := r.PathValue("id")
+	if agentID == "" {
+		response.BadRequest(w, "agent id is required")
+		return
+	}
+
+	q, err := parseMetricsQuery(r.URL.Query())
+	if err != nil {
+		response.BadRequest(w, err.Error())
+		return
+	}
+
+	metrics, err := h.service.GetPublicMetrics(r.Context(), agentID, q)
+	if err != nil {
+		if errors.Is(err, ErrAgentNotFound) {
+			response.NotFound(w, "agent not found")
+			return
+		}
+		response.InternalError(w, "failed to get agent metrics, please try again")
+		return
+	}
+
+	w.Header().Set("Cache-Control", "no-store")
+	response.WriteJson(w, http.StatusOK, response.GeneralData(metrics))
+}
+
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	clerkID, ok := middleware.ClerkIDFromContext(r.Context())

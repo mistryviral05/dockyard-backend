@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/lib/pq"
@@ -101,15 +102,23 @@ func (r *repository) GetByID(ctx context.Context, agentID, clerkID string) (*Age
 }
 
 func (r *repository) GetLatestMetrics(ctx context.Context, agentID, clerkID string) (*AgentMetrics, error) {
-	var m AgentMetrics
+	owner := "JOIN users u ON u.id = a.user_id"
+	where := "WHERE a.id = $1 AND u.clerk_id = $2"
+	args := []any{agentID, clerkID}
 
-	err := r.db.QueryRowContext(ctx, `
+	if clerkID == "" {
+		owner = ""
+		where = "WHERE a.id = $1"
+		args = []any{agentID}
+	}
+
+	query := fmt.Sprintf(`
 		SELECT a.id, a.agent_name, a.status, a.last_heartbeat_at, a.public_ip, a.os_info,
 		       m.cpu_usage, m.ram_usage, m.disk_usage,
 		       m.load_1, m.load_5, m.load_15,
 		       m.cpu_cores, m.uptime_seconds, m.recorded_at
 		FROM agents a
-		JOIN users u ON u.id = a.user_id
+		%s
 		LEFT JOIN LATERAL (
 			SELECT am.cpu_usage, am.ram_usage, am.disk_usage,
 			       am.load_1, am.load_5, am.load_15,
@@ -119,8 +128,12 @@ func (r *repository) GetLatestMetrics(ctx context.Context, agentID, clerkID stri
 			ORDER BY am.recorded_at DESC
 			LIMIT 1
 		) m ON true
-		WHERE a.id = $1 AND u.clerk_id = $2
-	`, agentID, clerkID).Scan(
+		%s
+	`, owner, where)
+
+	var m AgentMetrics
+
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(
 		&m.AgentID, &m.AgentName, &m.Status, &m.LastHeartbeatAt, &m.PublicIP, &m.OSInfo,
 		&m.CPUUsage, &m.MemoryUsage, &m.DiskUsage,
 		&m.Load1, &m.Load5, &m.Load15,

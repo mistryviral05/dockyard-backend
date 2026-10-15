@@ -66,6 +66,21 @@ func (s *Service) Create(ctx context.Context, clerkID, name, port string) (*Crea
 }
 
 func (s *Service) GetMetrics(ctx context.Context, clerkID, agentID string, q MetricsQuery) (*AgentMetricsDto, error) {
+	return s.buildMetrics(ctx, clerkID, agentID, q)
+}
+
+func (s *Service) GetPublicMetrics(ctx context.Context, agentID string, q MetricsQuery) (*AgentMetricsDto, error) {
+	dto, err := s.buildMetrics(ctx, "", agentID, q)
+	if err != nil {
+		return nil, err
+	}
+
+	dto.PublicIP = nil
+
+	return dto, nil
+}
+
+func (s *Service) buildMetrics(ctx context.Context, clerkID, agentID string, q MetricsQuery) (*AgentMetricsDto, error) {
 	m, err := s.repo.GetLatestMetrics(ctx, agentID, clerkID)
 	if err != nil {
 		return nil, err
