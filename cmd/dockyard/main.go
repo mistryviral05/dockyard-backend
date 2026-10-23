@@ -22,6 +22,7 @@ import (
 	"github.com/mistryviral05/dockyard/internal/http/modules/user"
 	"github.com/mistryviral05/dockyard/internal/http/modules/workspace"
 	"github.com/mistryviral05/dockyard/internal/http/router"
+	"github.com/mistryviral05/dockyard/internal/http/utils/centrifugo"
 	"github.com/mistryviral05/dockyard/internal/http/utils/cloudflare"
 	"github.com/mistryviral05/dockyard/internal/logger"
 	"github.com/mistryviral05/dockyard/internal/queue"
@@ -66,17 +67,19 @@ func main() {
 	wsModule := workspace.New(db, logger)
 	userModule := user.New(db, logger, cfg, wsModule.Repo)
 
-	agentModule := agent.New(db, logger, dnsClient, agent.InstallConfig{
-		ServerURL: cfg.AgentInstall.PublicAPIURL,
-		Image:     cfg.AgentInstall.Image,
-		ACMEEmail: cfg.AgentInstall.ACMEEmail,
-	})
-
 	projectModule := project.New(db, logger)
 
 	// Deployments are built before github: the webhook starts a deployment,
 	// so the github module needs this service handed to it.
 	deploymentModule := deployment.New(db, logger, queueClient)
+
+	// The agent module reports deploy results back onto those deployments, so
+	// it is built after them and shares the same repository.
+	agentModule := agent.New(db, logger, dnsClient, agent.InstallConfig{
+		ServerURL: cfg.AgentInstall.PublicAPIURL,
+		Image:     cfg.AgentInstall.Image,
+		ACMEEmail: cfg.AgentInstall.ACMEEmail,
+	}, deployment.NewRepository(db), centrifugo.New(&cfg.Centrifugo))
 	githubModule := github.New(db, cfg, logger, deploymentModule.Service)
 	realtimeModule := realtime.New(db, cfg, logger)
 	authMW := middleware.RequireAuth(logger)

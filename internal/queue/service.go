@@ -31,15 +31,17 @@ type Service struct {
 	ghClient   *gh.Client
 	registry   *config.ContainerRegistry
 	centrifugo *centrifugo.Client
+	baseDomain string
 	logger     *slog.Logger
 }
 
-func NewService(repo deployment.Repository, ghClient *gh.Client, registry *config.ContainerRegistry, realtime *centrifugo.Client, logger *slog.Logger) *Service {
+func NewService(repo deployment.Repository, ghClient *gh.Client, registry *config.ContainerRegistry, realtime *centrifugo.Client, baseDomain string, logger *slog.Logger) *Service {
 	return &Service{
 		repo:       repo,
 		ghClient:   ghClient,
 		registry:   registry,
 		centrifugo: realtime,
+		baseDomain: strings.Trim(baseDomain, "."),
 		logger:     logger,
 	}
 }
@@ -53,7 +55,7 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 		return err
 	}
 	if !claimed {
-	
+
 		s.logger.Warn("build skipped, deployment is not queued",
 			slog.String("deployment_id", deploymentId),
 		)
@@ -121,21 +123,33 @@ func (s *Service) DeployBuild(ctx context.Context, deploymentId string) error {
 		slog.String("image_tag", imageTag),
 	)
 	s.publishStatus(deploymentId, deployment.StatusDeploying, "")
-	s.publishSystemLine(deploymentId, "image pushed, starting your app")
+	s.publishSystemLine(deploymentId, "image pushed, sending it to your server")
 
-	if err := sleep(ctx, fakeDeployDuration); err != nil {
-		return s.markFailed(deploymentId, "the deployment was cancelled")
+	domain, err := s.dispatch(ctx, deploymentId, imageTag)
+	if err != nil {
+		s.logger.Error("dispatch failed",
+			slog.String("deployment_id", deploymentId),
+			slog.String("error", err.Error()),
+		)
+
+		switch {
+		case errors.Is(err, deployment.ErrNoAgentForProject):
+			return s.markFailed(deploymentId, "no server is attached to this project")
+		case errors.Is(err, deployment.ErrAgentNotRegistered):
+			return s.markFailed(deploymentId, "the agent on your server has not finished registration")
+		case errors.Is(err, errAgentUnreachable):
+			return s.markFailed(deploymentId, "your server did not answer, check that the agent is running")
+		default:
+			return s.markFailed(deploymentId, "your server rejected the deployment")
+		}
 	}
 
-	if _, err := s.repo.Transition(ctx, deploymentId, deployment.StatusRunning, map[string]interface{}{
-		"container_id": "fake_container_" + deploymentId,
-	}); err != nil {
-		return err
-	}
+	s.logger.Info("deploy command delivered",
+		slog.String("deployment_id", deploymentId),
+		slog.String("domain", domain),
+	)
+	s.publishSystemLine(deploymentId, "your server is pulling the image at https://"+domain)
 
-	s.logger.Info("deployment is running", slog.String("deployment_id", deploymentId))
-	s.publishStatus(deploymentId, deployment.StatusRunning, "")
-	s.publishSystemLine(deploymentId, "deployment is running")
 	return nil
 }
 
@@ -181,7 +195,7 @@ func (s *Service) prepareBuildSource(ctx context.Context, deploymentId string) (
 
 	buildDir, err := s.clone(ctx, buildCtx, token)
 	if err != nil {
-	
+
 		return &BuildSource{Dir: buildDir}, err
 	}
 
@@ -225,7 +239,6 @@ func (s *Service) clone(ctx context.Context, b *deployment.BuildContext, token s
 	return buildDir, nil
 }
 
-
 func (s *Service) writeDockerignore(deploymentId, buildDir string) {
 	path := filepath.Join(buildDir, ".dockerignore")
 
@@ -245,7 +258,6 @@ func (s *Service) markFailed(deploymentID, message string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-
 	s.publishSystemLine(deploymentID, message)
 
 	if _, err := s.repo.Transition(ctx, deploymentID, deployment.StatusFailed, map[string]interface{}{
@@ -261,7 +273,6 @@ func (s *Service) markFailed(deploymentID, message string) error {
 
 	return nil
 }
-
 
 func (s *Service) resolveDockerfile(ctx context.Context, buildDir string, deploymentId string) (string, map[string]string, error) {
 	dockerfilePath := filepath.Join(buildDir, "Dockerfile")
@@ -331,7 +342,6 @@ func (s *Service) generateDockerfile(ctx context.Context, deploymentId string, b
 
 }
 
-
 func (s *Service) nixpacksVariables(ctx context.Context, deploymentId string, buildDir string) (map[string]string, error) {
 	args := []string{
 		"run", "--rm",
@@ -339,7 +349,6 @@ func (s *Service) nixpacksVariables(ctx context.Context, deploymentId string, bu
 		"-w", "/app",
 		nixpacksImage, "plan", "/app",
 	}
-
 
 	out, err := exec.CommandContext(ctx, "docker", args...).Output()
 	if err != nil {
@@ -385,12 +394,10 @@ func (s *Service) imageTag(src *BuildSource) string {
 	)
 }
 
-
 func imageName(projectId string) string {
 	enc := base32.HexEncoding.WithPadding(base32.NoPadding)
 	return "proj-" + strings.ToLower(enc.EncodeToString([]byte(projectId)))
 }
-
 
 func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) (string, error) {
 	pipe, err := cmd.StdoutPipe()
@@ -402,7 +409,6 @@ func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) 
 	if err := cmd.Start(); err != nil {
 		return "", err
 	}
-
 
 	logs := s.newLogStream(deploymentId, LogTypeBuild)
 	defer logs.Close()
@@ -425,7 +431,6 @@ func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) 
 			slog.String("line", line),
 		)
 
-
 		if found, ok := buildErrorLine(line); ok {
 			reason = found
 		}
@@ -433,7 +438,6 @@ func (s *Service) stream(_ context.Context, deploymentId string, cmd *exec.Cmd) 
 
 	return reason, cmd.Wait()
 }
-
 
 func (s *Service) dockerLogin(ctx context.Context, deploymentId string) (string, error) {
 	cfgDir, err := os.MkdirTemp("", "dockyard-docker-")
@@ -489,7 +493,6 @@ func (s *Service) buildImage(ctx context.Context, deploymentId string, src *Buil
 		"--provenance=false",
 	}
 
-
 	for name, value := range src.BuildArgs {
 		args = append(args, "--build-arg", name+"="+value)
 	}
@@ -522,7 +525,6 @@ func nixpacksReason(out string) string {
 	return "could not detect how to build this project"
 }
 
-
 func trimBuildPrefix(line string) string {
 	if !strings.HasPrefix(line, "#") {
 		return line
@@ -543,7 +545,6 @@ func trimBuildPrefix(line string) string {
 
 	return rest
 }
-
 
 func buildErrorLine(line string) (string, bool) {
 	line = trimBuildPrefix(strings.TrimSpace(line))

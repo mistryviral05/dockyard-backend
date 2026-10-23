@@ -17,6 +17,7 @@ var updatableColumns = []string{
 	"image_tag",
 	"container_id",
 	"error_message",
+	"url",
 }
 
 const (
@@ -32,6 +33,8 @@ type Repository interface {
 	GetByID(ctx context.Context, id, clerkID string) (*Deployment, error)
 	ListByProject(ctx context.Context, projectID, clerkID, cursor string, limit int) ([]*Deployment, error)
 	GetBuildContext(ctx context.Context, deploymentID string) (*BuildContext, error)
+	GetDispatchTarget(ctx context.Context, deploymentID string) (*DispatchTarget, error)
+	FindAgentForDeployment(ctx context.Context, deploymentID, agentID string) (bool, error)
 	SetCommit(ctx context.Context, deploymentID, sha, message string) error
 	InsertLogs(ctx context.Context, deploymentID string, entries []LogEntry) error
 	ListLogs(ctx context.Context, deploymentID, clerkID, cursor string, limit int) ([]*DeploymentLog, error)
@@ -74,6 +77,55 @@ func (r *repository) GetBuildContext(ctx context.Context, deploymentID string) (
 	}
 
 	return &b, nil
+}
+
+func (r *repository) GetDispatchTarget(ctx context.Context, deploymentID string) (*DispatchTarget, error) {
+	var t DispatchTarget
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT d.id, d.project_id,
+		       COALESCE(p.project_name, ''), p.app_port, COALESCE(d.image_tag, ''),
+		       a.id, COALESCE(a.subdomain, ''), COALESCE(a.signing_secret, '')
+		FROM deployments d
+		JOIN projects p      ON p.id = d.project_id
+		JOIN project_agent pa ON pa.project_id = p.id
+		JOIN agents a        ON a.id = pa.agent_id
+		WHERE d.id = $1
+		ORDER BY pa.created_at
+		LIMIT 1
+	`, deploymentID).Scan(
+		&t.DeploymentId, &t.ProjectId,
+		&t.ProjectName, &t.AppPort, &t.ImageTag,
+		&t.AgentId, &t.AgentSubdomain, &t.SigningSecret,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNoAgentForProject
+		}
+		return nil, err
+	}
+
+	if t.AgentSubdomain == "" || t.SigningSecret == "" {
+		return nil, ErrAgentNotRegistered
+	}
+
+	return &t, nil
+}
+
+func (r *repository) FindAgentForDeployment(ctx context.Context, deploymentID, agentID string) (bool, error) {
+	var ok bool
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM deployments d
+			JOIN project_agent pa ON pa.project_id = d.project_id
+			WHERE d.id = $1 AND pa.agent_id = $2
+		)
+	`, deploymentID, agentID).Scan(&ok)
+
+	return ok, err
 }
 
 func (r *repository) SetCommit(ctx context.Context, deploymentID, sha, message string) error {
@@ -141,7 +193,7 @@ func (r *repository) Transition(ctx context.Context, id, to string, extra map[st
 const selectColumns = `
 	d.id, d.project_id, d.agent_id, d.triggered_by, d.trigger_source,
 	d.commit_sha, d.commit_message, d.branch, d.status, d.image_tag,
-	d.container_id, d.error_message, d.started_at, d.completed_at,
+	d.container_id, d.error_message, d.url, d.started_at, d.completed_at,
 	d.created_at, d.updated_at`
 
 const ownershipJoin = `
@@ -363,7 +415,7 @@ func scanDeployment(s scanner) (*Deployment, error) {
 	err := s.Scan(
 		&d.Id, &d.ProjectId, &d.AgentId, &d.TriggeredBy, &d.TriggerSource,
 		&d.CommitSha, &d.CommitMessage, &d.Branch, &d.Status, &d.ImageTag,
-		&d.ContainerId, &d.ErrorMessage, &d.StartedAt, &d.CompletedAt,
+		&d.ContainerId, &d.ErrorMessage, &d.Url, &d.StartedAt, &d.CompletedAt,
 		&d.CreatedAt, &d.UpdatedAt,
 	)
 	if err != nil {

@@ -1,6 +1,5 @@
 package queue
 
-
 import (
 	"fmt"
 	"log/slog"

@@ -1,6 +1,5 @@
 package queue
 
-
 const (
 	TypeDebugPing   = "debug:ping"
 	TypeDeployBuild = "deploy:build"
@@ -11,7 +10,6 @@ const (
 	QueueDefault  = "default"
 	QueueLow      = "low"
 )
-
 
 type DebugPingPayload struct {
 	Message string `json:"message"`

@@ -8,4 +8,7 @@ var (
 	ErrDeployInProgress   = errors.New("deployment already in progress")
 	ErrDeploymentNotFound = errors.New("deployment not found")
 	ErrRepoNotLinked      = errors.New("repository not linked")
+
+	ErrNoAgentForProject  = errors.New("no agent is attached to this project")
+	ErrAgentNotRegistered = errors.New("the agent has not finished registration")
 )

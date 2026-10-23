@@ -18,10 +18,22 @@ type Deployment struct {
 	ImageTag      sql.NullString
 	ContainerId   sql.NullString
 	ErrorMessage  sql.NullString
+	Url           sql.NullString
 	StartedAt     sql.NullTime
 	CompletedAt   sql.NullTime
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+}
+
+type DispatchTarget struct {
+	DeploymentId   string
+	ProjectId      string
+	ProjectName    string
+	AppPort        int
+	ImageTag       string
+	AgentId        string
+	AgentSubdomain string
+	SigningSecret  string
 }
 
 // LogEntry wo shape hai jo worker db me daalta hai.

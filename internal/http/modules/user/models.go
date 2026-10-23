@@ -2,7 +2,7 @@ package user
 
 import "encoding/json"
 
-type ClerkEvent  struct {
+type ClerkEvent struct {
 	Type string          `json:"type"`
 	Data json.RawMessage `json:"data"`
 }

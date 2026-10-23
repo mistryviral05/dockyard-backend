@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mistryviral05/dockyard/internal/dispatch"
 	"github.com/mistryviral05/dockyard/internal/http/utils/id"
 )
 
@@ -33,14 +34,49 @@ type DNSProvider interface {
 }
 
 type Service struct {
-	db   *sql.DB
-	repo Repository
-	dns  DNSProvider
+	db          *sql.DB
+	repo        Repository
+	dns         DNSProvider
+	deployments DeploymentUpdater
 }
 
-func NewService(repo Repository, db *sql.DB, dns DNSProvider) *Service {
+func NewService(repo Repository, db *sql.DB, dns DNSProvider, deployments DeploymentUpdater) *Service {
 
-	return &Service{repo: repo, db: db, dns: dns}
+	return &Service{repo: repo, db: db, dns: dns, deployments: deployments}
+}
+
+func (s *Service) RecordDeployResult(ctx context.Context, agentID, deploymentID string, req *dispatch.CallbackRequest) error {
+	owned, err := s.deployments.FindAgentForDeployment(ctx, deploymentID, agentID)
+	if err != nil {
+		return err
+	}
+	if !owned {
+		return ErrDeploymentNotOwned
+	}
+
+	extra := map[string]interface{}{
+		"container_id": nullIfEmpty(req.ContainerID),
+		"url":          nullIfEmpty(req.URL),
+	}
+
+	status := statusRunningDB
+	if req.Status == dispatch.StatusFailed {
+		status = statusFailedDB
+		extra["error_message"] = nullIfEmpty(req.Error)
+	}
+
+	if _, err := s.deployments.Transition(ctx, deploymentID, status, extra); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func nullIfEmpty(value string) interface{} {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return value
 }
 
 func (s *Service) Register(ctx context.Context, plainToken string, req *RegisterRequest, remoteIP string) (*RegisterResponse, error) {

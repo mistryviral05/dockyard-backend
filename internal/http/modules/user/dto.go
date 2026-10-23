@@ -1,7 +1,7 @@
 package user
 
 type CreateUserDto struct {
-	ClerkId string 
-	Email string
-	Name string
+	ClerkId string
+	Email   string
+	Name    string
 }

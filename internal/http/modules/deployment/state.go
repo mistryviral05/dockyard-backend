@@ -31,7 +31,6 @@ var terminal = map[string]bool{
 	StatusStopped: true,
 }
 
-
 var active = map[string]bool{
 	StatusPending:   true,
 	StatusQueued:    true,

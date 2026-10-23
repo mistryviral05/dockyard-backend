@@ -24,6 +24,7 @@ type InstallationDto struct {
 	Id           string `json:"id"`
 	AccountLogin string `json:"account_login"`
 }
+
 // RepoRef is everything the webhook needs about a repository we track,
 // fetched in one query so a push costs a single round trip before any work.
 type RepoRef struct {

@@ -45,7 +45,7 @@ func NewServer(cfg *config.Redis, logger *slog.Logger, h *Handlers) *Server {
 	)
 
 	mux := asynq.NewServeMux()
-	
+
 	mux.HandleFunc(TypeDeployBuild, h.HandleEqueueBuild)
 
 	return &Server{server: srv, mux: mux, logger: logger}

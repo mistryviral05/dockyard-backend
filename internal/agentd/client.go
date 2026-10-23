@@ -11,10 +11,13 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/mistryviral05/dockyard/internal/dispatch"
 )
 
 const (
 	heartbeatPath  = "/api/v1/agents/heartbeat"
+	callbackPath   = "/api/v1/agents/deployments/%s/callback"
 	maxAttempts    = 3
 	initialBackoff = time.Second
 	maxBackoff     = 8 * time.Second
@@ -66,6 +69,15 @@ func (c *ControlPlaneClient) SendHeartbeat(ctx context.Context, s *Snapshot) err
 	}
 
 	return c.post(ctx, c.baseURL+heartbeatPath, body)
+}
+
+func (c *ControlPlaneClient) SendDeployResult(ctx context.Context, deploymentID string, result dispatch.CallbackRequest) error {
+	body, err := json.Marshal(result)
+	if err != nil {
+		return permanent(fmt.Errorf("encode deploy result: %w", err))
+	}
+
+	return c.post(ctx, c.baseURL+fmt.Sprintf(callbackPath, deploymentID), body)
 }
 
 func (c *ControlPlaneClient) post(ctx context.Context, url string, body []byte) error {

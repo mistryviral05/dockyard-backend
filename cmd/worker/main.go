@@ -46,7 +46,7 @@ func main() {
 	logger.Info("Realtime configured", slog.String("centrifugo", cfg.Centrifugo.APIUrl))
 
 	deploymentRepository := deployment.NewRepository(db)
-	service := queue.NewService(deploymentRepository, ghClient, &cfg.ContainerRegistry, realtime, logger)
+	service := queue.NewService(deploymentRepository, ghClient, &cfg.ContainerRegistry, realtime, cfg.Cloudflare.BaseDomain, logger)
 	handlers := queue.NewHandlers(logger, service)
 	srv := queue.NewServer(&cfg.Redis, logger, handlers)
 

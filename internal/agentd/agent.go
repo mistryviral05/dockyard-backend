@@ -23,6 +23,8 @@ type Agent struct {
 	log      *slog.Logger
 	srv      *http.Server
 	state    *State
+	client   *ControlPlaneClient
+	docker   *Docker
 	reporter *Reporter
 	wg       sync.WaitGroup
 }
@@ -34,6 +36,11 @@ func New(cfg *Config, log *slog.Logger) (*Agent, error) {
 	}
 
 	a := &Agent{cfg: cfg, log: log, state: state}
+	a.docker = NewDocker(cfg, log)
+
+	if state.IsRegistered() {
+		a.client = NewControlPlaneClient(cfg, state.ControlPlaneToken)
+	}
 
 	a.srv = &http.Server{
 		Addr:         cfg.Addr,
@@ -65,7 +72,7 @@ func (a *Agent) buildReporter() *Reporter {
 
 	return NewReporter(
 		NewSystemCollector(a.cfg.DiskPath),
-		NewControlPlaneClient(a.cfg, a.state.ControlPlaneToken),
+		a.client,
 		log,
 		a.cfg.HeartbeatInterval,
 	)
@@ -75,6 +82,7 @@ func (a *Agent) routes() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", a.handleHealthz)
+	mux.HandleFunc("POST /v1/deploy", a.handleDeploy)
 
 	return mux
 }

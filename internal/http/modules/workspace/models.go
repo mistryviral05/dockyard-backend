@@ -1,6 +1,6 @@
 package workspace
-// keep your existing CreateWorkspaceDto; add:
 
+// keep your existing CreateWorkspaceDto; add:
 
 type CreateWorkspaceRequest struct {
 	Name string `json:"name" validate:"required"`
@@ -8,7 +8,7 @@ type CreateWorkspaceRequest struct {
 }
 
 type Workspace struct {
-	Id    string `json:"id"`
-	WspName  string `json:"wsp_name"`
-	WspSlug  string `json:"wsp_slug"`
+	Id      string `json:"id"`
+	WspName string `json:"wsp_name"`
+	WspSlug string `json:"wsp_slug"`
 }

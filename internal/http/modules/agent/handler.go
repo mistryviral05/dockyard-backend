@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/mistryviral05/dockyard/internal/http/middleware"
+	"github.com/mistryviral05/dockyard/internal/http/utils/centrifugo"
 	"github.com/mistryviral05/dockyard/internal/http/utils/response"
 )
 
@@ -19,14 +20,16 @@ type Handler struct {
 	service   *Service
 	logger    *slog.Logger
 	install   InstallConfig
+	realtime  *centrifugo.Client
 	agentAuth func(http.Handler) http.Handler
 }
 
-func NewHandler(service *Service, logger *slog.Logger, install InstallConfig) *Handler {
+func NewHandler(service *Service, logger *slog.Logger, install InstallConfig, realtime *centrifugo.Client) *Handler {
 	return &Handler{
 		service:   service,
 		logger:    logger,
 		install:   install,
+		realtime:  realtime,
 		agentAuth: middleware.RequireAgentAuth(logger, service),
 	}
 }

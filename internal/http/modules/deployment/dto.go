@@ -34,6 +34,7 @@ type DeploymentResponse struct {
 	CommitSha     string     `json:"commit_sha,omitempty"`
 	CommitMessage string     `json:"commit_message,omitempty"`
 	ImageTag      string     `json:"image_tag,omitempty"`
+	Url           *string    `json:"url"`
 	ErrorMessage  *string    `json:"error_message"`
 	StartedAt     *time.Time `json:"started_at"`
 	CompletedAt   *time.Time `json:"completed_at"`
@@ -79,6 +80,9 @@ func toResponse(d *Deployment) *DeploymentResponse {
 		CreatedAt:     d.CreatedAt,
 	}
 
+	if d.Url.Valid {
+		res.Url = &d.Url.String
+	}
 	if d.ErrorMessage.Valid {
 		res.ErrorMessage = &d.ErrorMessage.String
 	}

@@ -32,6 +32,14 @@ type Config struct {
 
 	ClockSkew time.Duration `yaml:"clock_skew" env:"DOCKYARD_CLOCK_SKEW" env-default:"5m"`
 
+	AgentDomain string `yaml:"agent_domain" env:"DOCKYARD_AGENT_DOMAIN"`
+
+	TraefikNetwork string `yaml:"traefik_network" env:"DOCKYARD_TRAEFIK_NETWORK" env-default:"web"`
+
+	CertResolver string `yaml:"cert_resolver" env:"DOCKYARD_CERT_RESOLVER" env-default:"le"`
+
+	DeployTimeout time.Duration `yaml:"deploy_timeout" env:"DOCKYARD_DEPLOY_TIMEOUT" env-default:"15m"`
+
 	MetricsEnabled bool `yaml:"metrics_enabled" env:"DOCKYARD_METRICS_ENABLED" env-default:"true"`
 
 	DiskPath string `yaml:"disk_path" env:"DOCKYARD_DISK_PATH" env-default:"/"`
