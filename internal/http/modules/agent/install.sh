@@ -173,7 +173,12 @@ docker run -d --name dockyard-agent --restart always \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$STATE_DIR":/var/lib/dockyard \
   -v /:/host:ro,rslave \
-  -p "$PORT":"$PORT" \
+  -p "127.0.0.1:$PORT:$PORT" \
+  --label traefik.enable=true \
+  --label 'traefik.http.routers.dockyard-agent.rule=Host(`'"$DOMAIN"'`)' \
+  --label traefik.http.routers.dockyard-agent.entrypoints=websecure \
+  --label traefik.http.routers.dockyard-agent.tls.certresolver=le \
+  --label traefik.http.services.dockyard-agent.loadbalancer.server.port="$PORT" \
   -e HOST_PROC=/host/proc \
   -e HOST_SYS=/host/sys \
   -e HOST_ETC=/host/etc \
@@ -210,8 +215,10 @@ fi
 
 printf '\n%sAgent is live%s\n\n' "$GREEN$BOLD" "$RESET"
 printf '  agent id   %s\n' "$AGENT_ID"
-printf '  domain     %s\n' "$DOMAIN"
+printf '  domain     https://%s\n' "$DOMAIN"
 printf '  apps       %s\n' "$WILDCARD"
 printf '  public ip  %s\n' "$PUBLIC_IP"
+printf '\n  the agent port is bound to localhost only, traefik serves it on\n'
+printf '  the domain above, so only 80 and 443 need to be open.\n'
 printf '\n  logs       docker logs -f dockyard-agent\n'
 printf '  restart    docker restart dockyard-agent\n\n'
