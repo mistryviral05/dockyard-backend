@@ -1,0 +1,27 @@
+FROM golang:1.26 AS build
+
+ARG AGENT_VERSION=dev
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+
+COPY . .
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath \
+        -ldflags="-s -w -X github.com/mistryviral05/dockyard/internal/agentd.Version=${AGENT_VERSION}" \
+        -o /out/agent ./cmd/agent
+
+
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates tzdata docker-cli
+
+COPY --from=build /out/agent /usr/local/bin/dockyard-agent
+
+EXPOSE 8999
+
+ENTRYPOINT ["/usr/local/bin/dockyard-agent"]

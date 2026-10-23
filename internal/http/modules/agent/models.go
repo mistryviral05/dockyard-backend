@@ -19,3 +19,30 @@ type Agent struct {
 	LastHeartbeatAt sql.NullTime
 	ProjectCount    int
 }
+
+type MetricPoint struct {
+	At   time.Time
+	CPU  *float64
+	RAM  *float64
+	Disk *float64
+	Load *float64
+}
+
+type AgentMetrics struct {
+	AgentID         string
+	AgentName       sql.NullString
+	Status          string
+	LastHeartbeatAt sql.NullTime
+	PublicIP        sql.NullString
+	OSInfo          sql.NullString
+
+	CPUUsage    *float64
+	MemoryUsage *float64
+	DiskUsage   *float64
+	Load1       *float64
+	Load5       *float64
+	Load15      *float64
+	CPUCores    *int
+	UptimeSec   *int64
+	RecordedAt  sql.NullTime
+}

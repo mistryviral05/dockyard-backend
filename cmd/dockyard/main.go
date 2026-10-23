@@ -22,6 +22,7 @@ import (
 	"github.com/mistryviral05/dockyard/internal/http/modules/user"
 	"github.com/mistryviral05/dockyard/internal/http/modules/workspace"
 	"github.com/mistryviral05/dockyard/internal/http/router"
+	"github.com/mistryviral05/dockyard/internal/http/utils/cloudflare"
 	"github.com/mistryviral05/dockyard/internal/logger"
 	"github.com/mistryviral05/dockyard/internal/queue"
 )
@@ -32,7 +33,11 @@ func main() {
 	ctx := context.Background()
 	//load the config
 	cfg := config.MustLoad()
-	logger := logger.New()
+	logger := logger.New(logger.Options{
+		Env:    cfg.Env,
+		Level:  cfg.Logging.Level,
+		Format: cfg.Logging.Format,
+	})
 
 	clerk.SetKey(cfg.Clerk.SecretKey)
 
@@ -53,9 +58,21 @@ func main() {
 		slog.String("redis", cfg.Redis.Addr),
 	)
 
+	dnsClient := cloudflare.New(&cfg.Cloudflare, logger)
+	logger.Info("DNS provider ready",
+		slog.String("base_domain", dnsClient.BaseDomain()),
+	)
+
 	wsModule := workspace.New(db, logger)
 	userModule := user.New(db, logger, cfg, wsModule.Repo)
-	agentModule := agent.New(db, logger)
+
+	githubModule := github.New(db, cfg, logger)
+	agentModule := agent.New(db, logger, dnsClient, agent.InstallConfig{
+		ServerURL: cfg.AgentInstall.PublicAPIURL,
+		Image:     cfg.AgentInstall.Image,
+		ACMEEmail: cfg.AgentInstall.ACMEEmail,
+	})
+
 	projectModule := project.New(db, logger)
 
 	// Deployments are built before github: the webhook starts a deployment,

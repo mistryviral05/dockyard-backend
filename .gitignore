@@ -40,4 +40,13 @@ dist
 
 plans
 
-architecture 
+architecture
+
+# local agent state, holds the control plane token
+.agentd/
+
+# local load testing helper
+cmd/stress/
+
+# scratch rest client file, holds live tokens
+agent.rest 

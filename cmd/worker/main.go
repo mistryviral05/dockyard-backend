@@ -19,7 +19,11 @@ import (
 func main() {
 
 	cfg := config.MustLoad()
-	logger := logger.New()
+	logger := logger.New(logger.Options{
+		Env:    cfg.Env,
+		Level:  cfg.Logging.Level,
+		Format: cfg.Logging.Format,
+	})
 
 	// TODO : Connect the db
 	db, err := postgres.New(cfg.Database)

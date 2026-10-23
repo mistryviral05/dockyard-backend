@@ -1,6 +1,10 @@
 package agent
 
-import "time"
+import (
+	"math"
+	"strings"
+	"time"
+)
 
 type CreateAgentRequest struct {
 	Name string `json:"name" validate:"required,min=2,max=255"`
@@ -26,6 +30,136 @@ type CreateAgentResponse struct {
 	TokenExpiresAt time.Time `json:"token_expires_at"`
 	TokenExpiresIn int64     `json:"token_expires_in"`
 	RunCommand     string    `json:"run_command"`
+}
+
+type HeartbeatRequest struct {
+	CPUUsage    *float64  `json:"cpu_usage" validate:"omitempty,gte=0,lte=100"`
+	MemoryUsage *float64  `json:"ram_usage" validate:"omitempty,gte=0,lte=100"`
+	DiskUsage   *float64  `json:"disk_usage" validate:"omitempty,gte=0,lte=100"`
+	Load1       *float64  `json:"load_1" validate:"omitempty,gte=0"`
+	Load5       *float64  `json:"load_5" validate:"omitempty,gte=0"`
+	Load15      *float64  `json:"load_15" validate:"omitempty,gte=0"`
+	CPUCores    int       `json:"cpu_cores" validate:"omitempty,gte=0,lte=4096"`
+	UptimeSec   *uint64   `json:"uptime_seconds" validate:"omitempty"`
+	OSInfo      string    `json:"os_info" validate:"omitempty,max=255"`
+	CollectedAt time.Time `json:"collected_at"`
+}
+
+type HeartbeatDto struct {
+	AgentID     string
+	PublicIP    string
+	CPUUsage    *float64
+	MemoryUsage *float64
+	DiskUsage   *float64
+	Load1       *float64
+	Load5       *float64
+	Load15      *float64
+	CPUCores    *int
+	UptimeSec   *int64
+	OSInfo      string
+	RecordedAt  time.Time
+}
+
+func (r *HeartbeatRequest) ToDto(agentID, publicIP string) *HeartbeatDto {
+	dto := &HeartbeatDto{
+		AgentID:     agentID,
+		PublicIP:    publicIP,
+		CPUUsage:    r.CPUUsage,
+		MemoryUsage: r.MemoryUsage,
+		DiskUsage:   r.DiskUsage,
+		Load1:       r.Load1,
+		Load5:       r.Load5,
+		Load15:      r.Load15,
+		OSInfo:      strings.TrimSpace(r.OSInfo),
+		RecordedAt:  time.Now().UTC(),
+	}
+
+	if r.CPUCores > 0 {
+		cores := r.CPUCores
+		dto.CPUCores = &cores
+	}
+
+	if r.UptimeSec != nil && *r.UptimeSec <= math.MaxInt64 {
+		uptime := int64(*r.UptimeSec)
+		dto.UptimeSec = &uptime
+	}
+
+	return dto
+}
+
+type HeartbeatResponse struct {
+	AgentID           string    `json:"agent_id"`
+	Status            string    `json:"status"`
+	RecordedAt        time.Time `json:"recorded_at"`
+	HeartbeatInterval int       `json:"heartbeat_interval_seconds"`
+}
+
+type RegisterRequest struct {
+	PublicIP string `json:"public_ip" validate:"omitempty,ip"`
+	OSInfo   string `json:"os_info" validate:"omitempty,max=255"`
+	Hostname string `json:"hostname" validate:"omitempty,max=255"`
+}
+
+type RegisterDto struct {
+	AgentID       string
+	Subdomain     string
+	PublicIP      string
+	OSInfo        string
+	SigningSecret string
+}
+
+type RegisterResponse struct {
+	AgentID           string `json:"agent_id"`
+	Token             string `json:"token"`
+	SigningSecret     string `json:"signing_secret"`
+	Domain            string `json:"domain"`
+	Wildcard          string `json:"wildcard"`
+	Port              string `json:"port"`
+	HeartbeatInterval int    `json:"heartbeat_interval_seconds"`
+}
+
+type MetricsQuery struct {
+	Window time.Duration
+	Since  time.Time
+}
+
+type MetricsSampleDto struct {
+	CPUUsage    *float64  `json:"cpu_usage"`
+	MemoryUsage *float64  `json:"ram_usage"`
+	DiskUsage   *float64  `json:"disk_usage"`
+	Load1       *float64  `json:"load_1"`
+	Load5       *float64  `json:"load_5"`
+	Load15      *float64  `json:"load_15"`
+	LoadPerCore *float64  `json:"load_per_core"`
+	RecordedAt  time.Time `json:"recorded_at"`
+	AgeSeconds  int64     `json:"age_seconds"`
+}
+
+type MetricPointDto struct {
+	T    time.Time `json:"t"`
+	CPU  *float64  `json:"cpu"`
+	RAM  *float64  `json:"ram"`
+	Disk *float64  `json:"disk"`
+	Load *float64  `json:"load"`
+}
+
+type AgentMetricsDto struct {
+	AgentID         string     `json:"agent_id"`
+	Name            string     `json:"name"`
+	Status          string     `json:"status"`
+	Live            bool       `json:"live"`
+	PublicIP        *string    `json:"public_ip"`
+	OSInfo          *string    `json:"os_info"`
+	CPUCores        *int       `json:"cpu_cores"`
+	UptimeSec       *int64     `json:"uptime_seconds"`
+	LastHeartbeatAt *time.Time `json:"last_heartbeat_at"`
+
+	Current *MetricsSampleDto `json:"current"`
+
+	Series        []*MetricPointDto `json:"series"`
+	WindowSeconds int               `json:"window_seconds"`
+	BucketSeconds int               `json:"bucket_seconds"`
+	PollSeconds   int               `json:"poll_seconds"`
 }
 
 type AgentDto struct {

@@ -9,13 +9,6 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
-// Har field pe `env` tag hai taki config bina yaml file ke bhi ban sake.
-// Tag ke bina cleanenv us field ko env se padhta hi nahi.
-//
-// Dhyan: `env-required` aur `env-default` ek saath mat lagana. cleanenv
-// pehle required check karta hai aur wahin error de deta hai, isliye us
-// case me default kabhi apply nahi hota.
-
 type ContainerRegistry struct {
 	RegistryHost      string `yaml:"registry_host" env:"REGISTRY_HOST" env-required:"true"`
 	RegistryNamespace string `yaml:"registry_namespace" env:"REGISTRY_NAMESPACE" env-required:"true"`
@@ -23,23 +16,30 @@ type ContainerRegistry struct {
 	RegistryToken     string `yaml:"registry_token" env:"REGISTRY_TOKEN" env-required:"true"`
 }
 type Centrifugo struct {
-	// APIUrl worker/server ke liye hai, WSUrl browser ke liye. Docker me ye
-	// dono alag hote hain, isliye alag rakhe hain.
 	APIUrl string `yaml:"api_url" env:"CENTRIFUGO_API_URL" env-required:"true"`
 	WSUrl  string `yaml:"ws_url" env:"CENTRIFUGO_WS_URL" env-required:"true"`
 
-	// APIKey publish karne ke liye: centrifugo.json ke "api_key" se match kare
 	APIKey string `yaml:"api_key" env:"CENTRIFUGO_API_KEY" env-required:"true"`
 
-	// TokenSecret connection JWT sign karta hai: centrifugo.json ke
-	// "token_hmac_secret_key" se bilkul same hona chahiye
 	TokenSecret string `yaml:"token_secret" env:"CENTRIFUGO_TOKEN_SECRET" env-required:"true"`
 
-	// SubscribeSecret wo shared header hai jo centrifugo subscribe proxy call
-	// me bhejta hai. Khali chhod do to check off ho jata hai (local dev).
 	SubscribeSecret string `yaml:"subscribe_secret" env:"CENTRIFUGO_SUBSCRIBE_SECRET"`
 
 	TokenTTL time.Duration `yaml:"token_ttl" env:"CENTRIFUGO_TOKEN_TTL" env-default:"1h"`
+}
+
+type AgentInstall struct {
+	PublicAPIURL string `yaml:"public_api_url" env:"PUBLIC_API_URL" env-required:"true"`
+	Image        string `yaml:"image" env:"AGENT_IMAGE" env-default:"ghcr.io/mistryviral05/dockyard-agent:latest"`
+	ACMEEmail    string `yaml:"acme_email" env:"ACME_EMAIL" env-required:"true"`
+}
+
+type Cloudflare struct {
+	APIToken   string        `yaml:"api_token" env:"CLOUDFLARE_API_TOKEN" env-required:"true"`
+	ZoneID     string        `yaml:"zone_id" env:"CLOUDFLARE_ZONE_ID" env-required:"true"`
+	BaseDomain string        `yaml:"base_domain" env:"CLOUDFLARE_BASE_DOMAIN" env-required:"true"`
+	RecordTTL  int           `yaml:"record_ttl" env:"CLOUDFLARE_RECORD_TTL" env-default:"60"`
+	Timeout    time.Duration `yaml:"timeout" env:"CLOUDFLARE_TIMEOUT" env-default:"15s"`
 }
 
 type Redis struct {
@@ -49,8 +49,6 @@ type Redis struct {
 }
 
 type HTTPServer struct {
-	// Render/VPS pe 0.0.0.0 pe bind karna zaroori hai. localhost pe bind
-	// karoge to bahar se koi connect nahi kar payega, health check bhi nahi.
 	Addr         string        `yaml:"address" env:"HTTP_ADDRESS" env-required:"true"`
 	ReadTimeout  time.Duration `yaml:"read_timeout" env:"HTTP_READ_TIMEOUT" env-default:"10s"`
 	WriteTimeout time.Duration `yaml:"write_timeout" env:"HTTP_WRITE_TIMEOUT" env-default:"30s"`
@@ -58,7 +56,6 @@ type HTTPServer struct {
 }
 
 type CORS struct {
-	// env me comma se alag karo: "https://a.com,https://b.com"
 	AllowedOrigins []string `yaml:"allowed_origins" env:"CORS_ALLOWED_ORIGINS" env-required:"true"`
 }
 
@@ -85,16 +82,21 @@ type Github struct {
 	ClientId     string `yaml:"client_id" env:"GITHUB_CLIENT_ID" env-required:"true"`
 	ClientSecret string `yaml:"client_secret" env:"GITHUB_CLIENT_SECRET" env-required:"true"`
 
-	// Ye ek file path hai, key ka content nahi. Env me PEM nahi bhej sakte,
-	// isliye host pe file rakhni hi padegi (Render pe Secret Files).
 	PrivateKeyPath string `yaml:"private_key_path" env:"GITHUB_PRIVATE_KEY_PATH" env-required:"true"`
 
 	WebhookSecret string `yaml:"webhook_secret" env:"GITHUB_WEBHOOK_SECRET" env-required:"true"`
 	StateSecret   string `yaml:"state_secret" env:"GITHUB_STATE_SECRET" env-required:"true"`
 }
 
+// Logging dono khali chhod sakte ho - logger ENV ke hisaab se chun leta hai.
+type Logging struct {
+	Level  string `yaml:"level" env:"LOG_LEVEL"`
+	Format string `yaml:"format" env:"LOG_FORMAT"`
+}
+
 type Config struct {
 	Env               string `yaml:"env" env:"ENV" env-required:"true"`
+	Logging           `yaml:"logging"`
 	HTTPServer        `yaml:"http_server"`
 	CORS              `yaml:"cors"`
 	Clerk             `yaml:"clerk"`
@@ -103,18 +105,10 @@ type Config struct {
 	Redis             `yaml:"redis"`
 	ContainerRegistry `yaml:"container_registry"`
 	Centrifugo        `yaml:"centrifugo"`
+	Cloudflare        `yaml:"cloudflare"`
+	AgentInstall      `yaml:"agent_install"`
 }
 
-// MustLoad config uthata hai. Do tarike chalte hain:
-//
-//   - File: --config ./config/local.yaml ya CONFIG_PATH=/etc/secrets/config.yaml
-//     File padhne ke baad env vars usko override karte hain, isliye ek
-//     value ko temporarily badalna ho to file chhedne ki zaroorat nahi.
-//
-//   - Env: koi path mat do, poora config env vars se banega. Render aur
-//     VPS pe yahi seedha raasta hai.
-//
-// Local dev pehle jaisa hi chalta hai - `make run` --config bhejta hai.
 func MustLoad() *Config {
 
 	configPath := os.Getenv("CONFIG_PATH")
@@ -127,7 +121,6 @@ func MustLoad() *Config {
 
 	var cfg Config
 
-	// koi file nahi di gayi: sab kuch env se
 	if configPath == "" {
 		if err := cleanenv.ReadEnv(&cfg); err != nil {
 			log.Fatalf("Can't read the config from the environment : %s", err.Error())

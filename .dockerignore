@@ -15,5 +15,7 @@ docker-compose.prod.yml
 Dockerfile.*
 Makefile
 api.rest
+agent.rest
 README.md
 architecture
+.agentd

@@ -1,6 +1,6 @@
 @base=http://localhost:8040/api/v1
 
-@token=eyJhbGciOiJSUzI1NiIsImNhdCI6ImNsX0I3ZDRQRDIyMkFBQSIsImtpZCI6Imluc18zR0xSeHozVnhkZXhqRzltZEJnWGhnS0FrdTYiLCJ0eXAiOiJKV1QifQ.eyJhenAiOiJodHRwOi8vbG9jYWxob3N0OjMwMDAiLCJleHAiOjE3ODc1NDk0NzYsImlhdCI6MTc4NzQ2MzA3NiwiaXNzIjoiaHR0cHM6Ly9lbm91Z2gtbWFtbWFsLTY0LmNsZXJrLmFjY291bnRzLmRldiIsImp0aSI6ImUxMDEyODRlYzFjZGNmODVhZDRkIiwibmJmIjoxNzg3NDYzMDcxLCJzdWIiOiJ1c2VyXzNIbFdvaUVvMVB1M3BTTEJTY1lyRHBYeGdFeCJ9.WKtzsKekhpoFogDP_e5hK__GOTp7p1MB-ArFLiFHoMQw8BEV0OgBzJxcDuKTmB-hBtX1sw8uhCurzT2cVDXKiV_AyWgVEzb5we0k_qQV7kCbThIhz70zdzyR5uPRgPZp_-p7xDUsmEAA2aNPYeX2A0y8xjJnBbFg0PJNV5MMAoQEQ06wuFY-Ubu2oYA4OFMslnqy9zS_sS0rKgOgPQ61W-pdCz7-HwI6eG-N75A687qQ810ECLcBFrvcQuai162M6QqApiAz4xL6Bm1kr--g-lm3Z4vvZWp6sCg0n1AJY6kAeBVZIFJVSsESMToU0LQvRGWSAWxOgXs0MQbH3x2n9w
+@token=eyJhbGciOiJSUzI1NiIsImNhdCI6ImNsX0I3ZDRQRDIyMkFBQSIsImtpZCI6Imluc18zR0xSeHozVnhkZXhqRzltZEJnWGhnS0FrdTYiLCJ0eXAiOiJKV1QifQ.eyJhenAiOiJodHRwOi8vbG9jYWxob3N0OjMwMDAiLCJleHAiOjE3OTIxMjUwNTcsImlhdCI6MTc5MjAzODY1NywiaXNzIjoiaHR0cHM6Ly9lbm91Z2gtbWFtbWFsLTY0LmNsZXJrLmFjY291bnRzLmRldiIsImp0aSI6IjY5ZWUyZTM2YmE2NmIxMGZiZTMyIiwibmJmIjoxNzkyMDM4NjUyLCJzdWIiOiJ1c2VyXzNIbFdvaUVvMVB1M3BTTEJTY1lyRHBYeGdFeCJ9.8lie3vunH1ucXHwyEFwE5KQcpDiXaSHoHQr6jD60Rrtjj555FKodz6qDl8OqNN19VY9jq1PUooi66pu30h0J3LwC0xa-ozZkhWPaXKz-zinZ2-rOcMIZaP0UvXHg_fYxCwyWbyjoUZqcH9KbH0wTqulvGTdox-0v7QvJnVwTjZ7ZZTtEXfpG5Fz7L912wmJ5FB-2gKRVe1TkUCxKqe1MRpIVDM_6U3VhdFq9odixdNmnCsMRPycAnUIXfZdflXuMc7jTuFA2fa-10JY3ae6JZaGnVTkdTOJbgwZh8eaoZ0TFXHQ4YxGrGjyZYkOKBDR6-j-HOIlzCot08KLWQqYQAQ
 
 POST {{base}}/users/webhook/clerk
 Content-Type: application/json
@@ -101,3 +101,183 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 ###
+
+# ---------------------------------------------------------------- agents
+
+@agentId=agent_zbo6rtbamqn8niqhicfqg2ui990ujmo5
+@agentToken=agt_jbCM7hnH_WZzS6FWL4Q18v8UZnmRlpZWYhz_R_ZTsqg
+
+### list agents
+GET {{base}}/agents
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### single agent
+GET {{base}}/agents/{{agentId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+# ------------------------------------------------- registration (temp token)
+
+### create an agent, copy the token from the response
+POST {{base}}/agents
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "vm1",
+  "port": "8999"
+}
+
+### register with the temp token from the create response
+@tempToken=agt_PASTE_THE_TEMP_TOKEN_HERE
+
+POST {{base}}/agents/register
+Content-Type: application/json
+Authorization: Bearer {{tempToken}}
+
+{
+  "public_ip": "65.21.10.42",
+  "os_info": "Ubuntu 24.04 (x86_64)",
+  "hostname": "vm1"
+}
+
+### 401 - the same temp token a second time
+POST {{base}}/agents/register
+Content-Type: application/json
+Authorization: Bearer {{tempToken}}
+
+{
+  "public_ip": "65.21.10.42"
+}
+
+### 400 - bad ip
+POST {{base}}/agents/register
+Content-Type: application/json
+Authorization: Bearer {{tempToken}}
+
+{
+  "public_ip": "not-an-ip"
+}
+
+# ------------------------------------------------- heartbeat (agent token)
+
+### fake heartbeat - run this a few times to fill the chart
+POST {{base}}/agents/heartbeat
+Content-Type: application/json
+Authorization: Bearer {{agentToken}}
+
+{
+  "cpu_usage": 23.4,
+  "ram_usage": 71.8,
+  "disk_usage": 49.7,
+  "load_1": 1.2,
+  "load_5": 0.9,
+  "load_15": 0.7,
+  "cpu_cores": 16,
+  "uptime_seconds": 7200,
+  "os_info": "ubuntu 24.04 (x86_64)"
+}
+
+### second sample with different numbers
+POST {{base}}/agents/heartbeat
+Content-Type: application/json
+Authorization: Bearer {{agentToken}}
+
+{
+  "cpu_usage": 88.1,
+  "ram_usage": 74.2,
+  "disk_usage": 49.8,
+  "load_1": 9.6,
+  "load_5": 4.1,
+  "load_15": 2.2,
+  "cpu_cores": 16,
+  "uptime_seconds": 7260,
+  "os_info": "ubuntu 24.04 (x86_64)"
+}
+
+### partial heartbeat - only cpu, everything else stays null
+POST {{base}}/agents/heartbeat
+Content-Type: application/json
+Authorization: Bearer {{agentToken}}
+
+{
+  "cpu_usage": 5.5
+}
+
+### 401 - bad agent token
+POST {{base}}/agents/heartbeat
+Content-Type: application/json
+Authorization: Bearer agt_this_token_does_not_exist
+
+{
+  "cpu_usage": 5.5
+}
+
+### 400 - cpu out of range
+POST {{base}}/agents/heartbeat
+Content-Type: application/json
+Authorization: Bearer {{agentToken}}
+
+{
+  "cpu_usage": 999
+}
+
+# ------------------------------------------------- metrics (clerk token)
+
+### default window 15m - cards + chart series
+GET {{base}}/agents/{{agentId}}/metrics
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 1 hour window
+GET {{base}}/agents/{{agentId}}/metrics?window=1h
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 6 hour window - points get averaged into buckets
+GET {{base}}/agents/{{agentId}}/metrics?window=6h
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### poll shape - only points newer than the last one you drew
+GET {{base}}/agents/{{agentId}}/metrics?window=15m&since=2026-10-15T09:40:12Z
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 400 - bad window
+GET {{base}}/agents/{{agentId}}/metrics?window=abc
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 404 - agent that is not yours
+GET {{base}}/agents/agent_doesnotexist0000000000000000/metrics
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+# ------------------------------------------------- bench (no auth, load test only)
+
+### same query as the real endpoint, no clerk token, public_ip stripped
+GET {{base}}/agents/{{agentId}}/metrics/bench
+
+### heavier window for the load test
+GET {{base}}/agents/{{agentId}}/metrics/bench?window=6h
+
+###
+
+
+
+
+1..16 | ForEach-Object {
+  Start-Job {
+    $end = (Get-Date).AddSeconds(60)
+    while ((Get-Date) -lt $end) { $x = 1; 1..200000 | ForEach-Object { $x = $x * 1.0000001 } }
+  }
+}
+
+
+Get-Job | Stop-Job; Get-Job | Remove-Job
+
+
+make stress STRESS_SECONDS=300
+make bench-heavy

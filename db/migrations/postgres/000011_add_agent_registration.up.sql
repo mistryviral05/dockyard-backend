@@ -1,0 +1,3 @@
+ALTER TABLE agents
+    ADD COLUMN IF NOT EXISTS signing_secret TEXT,
+    ADD COLUMN IF NOT EXISTS registered_at  TIMESTAMPTZ;
