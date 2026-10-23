@@ -66,7 +66,6 @@ func main() {
 	wsModule := workspace.New(db, logger)
 	userModule := user.New(db, logger, cfg, wsModule.Repo)
 
-	githubModule := github.New(db, cfg, logger)
 	agentModule := agent.New(db, logger, dnsClient, agent.InstallConfig{
 		ServerURL: cfg.AgentInstall.PublicAPIURL,
 		Image:     cfg.AgentInstall.Image,
