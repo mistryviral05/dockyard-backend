@@ -1,0 +1,211 @@
+@base=http://localhost:8040/api/v1
+@prod=https://api.dockyard.viralmistry.dev/api/v1
+
+@clerkToken=eyJhbGciOiJSUzI1NiIsImNhdCI6ImNsX0I3ZDRQRDIyMkFBQSIsImtpZCI6Imluc18zR0xSeHozVnhkZXhqRzltZEJnWGhnS0FrdTYiLCJ0eXAiOiJKV1QifQ.eyJhenAiOiJodHRwOi8vbG9jYWxob3N0OjMwMDAiLCJleHAiOjE3OTI4NTYzODAsImlhdCI6MTc5Mjc2OTk4MCwiaXNzIjoiaHR0cHM6Ly9lbm91Z2gtbWFtbWFsLTY0LmNsZXJrLmFjY291bnRzLmRldiIsImp0aSI6ImMwOWYyOGEyNmRkODlhOWUyZTRmIiwibmJmIjoxNzkyNzY5OTc1LCJzdWIiOiJ1c2VyXzNIbFdvaUVvMVB1M3BTTEJTY1lyRHBYeGdFeCJ9.9xCC5UPdofMGJjk8s3j0dY6UvB6gMZsT6SDmzZlD5XZS4exApTmt1Qpb33VWX6UKoNKLjfJdhXqLE3Z491sIDe2xMxOtfwHA6HeTCZUK0lHdtpoUUbOU93tlU82fTTJFjOxPql6N8Kiz_R5MHukBgTlTpZzwmUE28_AZRFGokuqmJGEff-bskW4udIpqVDzyOmshfJTUUprXKZuo0tz7q-CEhCyidxIwg8ywMlOaGiUw_Er6O7fntyZl_MgnGA699w3bnwQp32FbgsRqFekc5qqzVNTgOpakop4OqOFiH5RrF1dLws6Kfep3S2FxSy325QOG3Oiu9RPp2qfaC-WB3Q
+
+@agentId=agent_c81o0f5s609uksrpki11uyeg1tuee4v5
+@tempToken=agt_Us-nyIX8FLf3-HMHjBxvMmPmvdprDSgu40NlAHgMLJA
+@agentToken=agt_ZHFJHN4BxrgSOQ8GuyUcBWllkPpyBlQY3Joe-pZkMzU
+# agt_ZHFJHN4BxrgSOQ8GuyUcBWllkPpyBlQY3Joe-pZkMzU
+
+# sTxa7p99f1X2UwrnUTX8fttMvcnmTglzh_oRryFZyXs
+# =====================================================================
+# 1. CREATE
+# =====================================================================
+
+### create an agent, copy "token" and "id" from the response
+POST {{base}}/agents
+Content-Type: application/json
+Authorization: Bearer {{clerkToken}}
+
+{
+  "name": "vm1",
+  "port": "8999"
+}
+
+### list every agent of this user
+GET {{base}}/agents
+Content-Type: application/json
+Authorization: Bearer {{clerkToken}}
+
+### single agent
+GET {{base}}/agents/{{agentId}}
+Content-Type: application/json
+Authorization: Bearer {{clerkToken}}
+
+# =====================================================================
+# 2. INSTALL SCRIPT, public, this is what curl pipes into bash
+# =====================================================================
+
+### read the script the create response tells users to run
+GET {{base}}/agents/install.sh
+
+### the same from production
+GET {{prod}}/agents/install.sh
+
+# =====================================================================
+# 3. REGISTER, uses the one time temp token
+# =====================================================================
+
+### happy path, creates both dns records and returns the long lived token
+POST {{base}}/agents/register
+Content-Type: application/json
+Authorization: Bearer {{tempToken}}
+
+{
+  "public_ip": "1.2.3.4",
+  "os_info": "Ubuntu 24.04 (x86_64)",
+  "hostname": "vm1"
+}
+
+### replay, the same temp token a second time, must be 401
+POST {{base}}/agents/register
+Content-Type: application/json
+Authorization: Bearer {{tempToken}}
+
+{
+  "public_ip": "1.2.3.4"
+}
+
+### bad ip, must be 400
+POST {{base}}/agents/register
+Content-Type: application/json
+Authorization: Bearer {{tempToken}}
+
+{
+  "public_ip": "not-an-ip"
+}
+
+### no token, must be 401
+POST {{base}}/agents/register
+Content-Type: application/json
+
+{
+  "public_ip": "1.2.3.4"
+}
+
+### body left out, ip falls back to the caller address
+POST {{base}}/agents/register
+Content-Type: application/json
+Authorization: Bearer {{tempToken}}
+
+# =====================================================================
+# 3. HEARTBEAT, uses the long lived agent token
+# =====================================================================
+
+### full sample
+POST {{base}}/agents/heartbeat
+Content-Type: application/json
+Authorization: Bearer {{agentToken}}
+
+{
+  "cpu_usage": 23.4,
+  "ram_usage": 71.8,
+  "disk_usage": 49.7,
+  "load_1": 1.2,
+  "load_5": 0.9,
+  "load_15": 0.7,
+  "cpu_cores": 16,
+  "uptime_seconds": 7200,
+  "os_info": "Ubuntu 24.04 (x86_64)"
+}
+
+### busy sample, run a few of these to make the chart move
+POST {{base}}/agents/heartbeat
+Content-Type: application/json
+Authorization: Bearer {{agentToken}}
+
+{
+  "cpu_usage": 88.1,
+  "ram_usage": 74.2,
+  "disk_usage": 49.8,
+  "load_1": 9.6,
+  "load_5": 4.1,
+  "load_15": 2.2,
+  "cpu_cores": 16,
+  "uptime_seconds": 7260,
+  "os_info": "Ubuntu 24.04 (x86_64)"
+}
+
+### partial sample, every missing gauge stays null in the database
+POST {{base}}/agents/heartbeat
+Content-Type: application/json
+Authorization: Bearer {{agentToken}}
+
+{
+  "cpu_usage": 5.5
+}
+
+### bad token, must be 401
+POST {{base}}/agents/heartbeat
+Content-Type: application/json
+Authorization: Bearer agt_this_token_does_not_exist
+
+{
+  "cpu_usage": 5.5
+}
+
+### cpu out of range, must be 400
+POST {{base}}/agents/heartbeat
+Content-Type: application/json
+Authorization: Bearer {{agentToken}}
+
+{
+  "cpu_usage": 999
+}
+
+# =====================================================================
+# 4. METRICS, uses the clerk token, this is what the dashboard polls
+# =====================================================================
+
+### default window of 15m, cards plus chart series
+GET {{base}}/agents/{{agentId}}/metrics
+Content-Type: application/json
+Authorization: Bearer {{clerkToken}}
+
+### one hour
+GET {{base}}/agents/{{agentId}}/metrics?window=1h
+Content-Type: application/json
+Authorization: Bearer {{clerkToken}}
+
+### six hours, points get averaged into wider buckets
+GET {{base}}/agents/{{agentId}}/metrics?window=6h
+Content-Type: application/json
+Authorization: Bearer {{clerkToken}}
+
+### poll shape, only the points newer than the last one drawn
+GET {{base}}/agents/{{agentId}}/metrics?window=15m&since=2026-10-23T09:40:12Z
+Content-Type: application/json
+Authorization: Bearer {{clerkToken}}
+
+### bad window, must be 400
+GET {{base}}/agents/{{agentId}}/metrics?window=abc
+Content-Type: application/json
+Authorization: Bearer {{clerkToken}}
+
+### unknown agent, must be 404
+GET {{base}}/agents/agent_doesnotexist0000000000000000/metrics
+Content-Type: application/json
+Authorization: Bearer {{clerkToken}}
+
+# =====================================================================
+# 5. BENCH, no auth, load testing only
+# =====================================================================
+
+### same query as the real endpoint, public_ip stripped
+GET {{base}}/agents/{{agentId}}/metrics/bench
+
+### heavier window
+GET {{base}}/agents/{{agentId}}/metrics/bench?window=6h
+
+# =====================================================================
+# 6. AGENT ITSELF, call the agent process directly
+# =====================================================================
+
+### local agent health
+GET http://localhost:8999/healthz
+
+### agent on the vm
+GET http://1.2.3.4:8999/healthz
+
+###
