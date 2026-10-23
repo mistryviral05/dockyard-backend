@@ -58,6 +58,38 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
+  # The agent image users pull onto their own servers. It is a public package,
+  # so the install script can pull it without any credentials.
+  agent:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.agent
+          push: true
+          build-args: |
+            AGENT_VERSION=sha-${{ github.sha }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/dockyard-agent:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/dockyard-agent:latest
+          cache-from: type=gha,scope=agent
+          cache-to: type=gha,mode=max,scope=agent
+
   # The builder image the worker runs for every user build. It lives here so a
   # rebuilt VPS gets it from the deploy instead of somebody remembering to
   # build it by hand.

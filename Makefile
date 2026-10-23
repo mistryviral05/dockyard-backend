@@ -66,6 +66,15 @@ bench-rate:
 bench-heavy:
 	@$(MAKE) bench BENCH_WINDOW=6h BENCH_CONN=100 BENCH_DURATION=30
 
+AGENT_IMAGE?=ghcr.io/mistryviral05/dockyard-agent
+
+build-agent-image:
+	@docker build -f Dockerfile.agent --build-arg AGENT_VERSION=$(AGENT_VERSION) -t $(AGENT_IMAGE):$(AGENT_VERSION) -t $(AGENT_IMAGE):latest .
+
+push-agent-image: build-agent-image
+	@docker push $(AGENT_IMAGE):$(AGENT_VERSION)
+	@docker push $(AGENT_IMAGE):latest
+
 STRESS_CORES?=
 STRESS_SECONDS?=120
 
@@ -112,4 +121,4 @@ migrate-version:
 migrate-force:
 	@$(MIGRATE) force $(version)
 
-.PHONY: run migrate-create migrate-up migrate-down migrate-down-all migrate-goto migrate-version migrate-force run-worker run-agent build-agent run-ping build start bench bench-latency bench-rate bench-heavy bench-seed stress
+.PHONY: run migrate-create migrate-up migrate-down migrate-down-all migrate-goto migrate-version migrate-force run-worker run-agent build-agent run-ping build start bench bench-latency bench-rate bench-heavy bench-seed stress build-agent-image push-agent-image

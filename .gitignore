@@ -46,4 +46,7 @@ architecture
 .agentd/
 
 # local load testing helper
-cmd/stress/ 
+cmd/stress/
+
+# scratch rest client file, holds live tokens
+agent.rest 
