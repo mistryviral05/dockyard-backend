@@ -15,6 +15,7 @@ const (
 	StatusPending         = "pending"
 	StatusActive          = "active"
 	TokenTypeRegistration = "registration"
+	TokenTypeJWT          = "jwt"
 )
 
 var (
@@ -22,6 +23,10 @@ var (
 	ErrAgentNameConflict = errors.New("an agent with this name already exists")
 	ErrAgentNotFound     = errors.New("agent not found")
 	ErrAgentTokenInvalid = errors.New("agent token is invalid, revoked or expired")
+
+	ErrRegistrationTokenInvalid = errors.New("registration token is invalid, used or expired")
+	ErrSubdomainConflict        = errors.New("subdomain is already taken")
+	ErrPublicIPInvalid          = errors.New("public ip is missing or not a valid address")
 )
 
 type Repository interface {
@@ -31,6 +36,10 @@ type Repository interface {
 	GetLatestMetrics(ctx context.Context, agentID, clerkID string) (*AgentMetrics, error)
 	GetMetricsSeries(ctx context.Context, agentID string, since time.Time, bucketSeconds, limit int) ([]*MetricPoint, error)
 	FindAgentIDByTokenHash(ctx context.Context, tokenHash string) (string, error)
+	FindPendingByTempToken(ctx context.Context, tokenHash string) (*Agent, error)
+	SubdomainTaken(ctx context.Context, subdomain string) (bool, error)
+	CompleteRegistration(ctx context.Context, dto *RegisterDto) error
+	InsertToken(ctx context.Context, tokenID, agentID, tokenHash, tokenType string) error
 	InsertMetrics(ctx context.Context, metricID string, dto *HeartbeatDto) error
 	UpdateHeartbeat(ctx context.Context, dto *HeartbeatDto) error
 	WithTx(db postgres.DBTX) Repository
@@ -179,6 +188,82 @@ func (r *repository) GetMetricsSeries(ctx context.Context, agentID string, since
 	}
 
 	return points, nil
+}
+
+func (r *repository) FindPendingByTempToken(ctx context.Context, tokenHash string) (*Agent, error) {
+	var a Agent
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id, user_id, agent_name, port, status, token_exp, created_at
+		FROM agents
+		WHERE temp_token = $1
+		  AND status = 'pending'
+		  AND (token_exp IS NULL OR token_exp > now())
+	`, tokenHash).Scan(
+		&a.Id, &a.UserId, &a.AgentName, &a.Port, &a.Status, &a.TokenExp, &a.CreatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRegistrationTokenInvalid
+		}
+		return nil, err
+	}
+
+	return &a, nil
+}
+
+func (r *repository) SubdomainTaken(ctx context.Context, subdomain string) (bool, error) {
+	var exists bool
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT EXISTS (SELECT 1 FROM agents WHERE subdomain = $1)
+	`, subdomain).Scan(&exists)
+
+	return exists, err
+}
+
+func (r *repository) CompleteRegistration(ctx context.Context, dto *RegisterDto) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE agents
+		SET subdomain      = $2,
+		    public_ip      = $3,
+		    os_info        = COALESCE(NULLIF($4, ''), os_info),
+		    signing_secret = $5,
+		    status         = 'active',
+		    registered_at  = now(),
+		    temp_token     = NULL,
+		    token_exp      = NULL,
+		    updated_at     = now()
+		WHERE id = $1 AND status = 'pending'
+	`, dto.AgentID, dto.Subdomain, dto.PublicIP, dto.OSInfo, dto.SigningSecret)
+
+	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			return ErrSubdomainConflict
+		}
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrRegistrationTokenInvalid
+	}
+
+	return nil
+}
+
+func (r *repository) InsertToken(ctx context.Context, tokenID, agentID, tokenHash, tokenType string) error {
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO agent_tokens (id, agent_id, token, type, expires_at)
+		VALUES ($1, $2, $3, $4, NULL)
+	`, tokenID, agentID, tokenHash, tokenType)
+
+	return err
 }
 
 func (r *repository) FindAgentIDByTokenHash(ctx context.Context, tokenHash string) (string, error) {

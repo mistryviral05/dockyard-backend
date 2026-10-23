@@ -22,6 +22,7 @@ import (
 	"github.com/mistryviral05/dockyard/internal/http/modules/user"
 	"github.com/mistryviral05/dockyard/internal/http/modules/workspace"
 	"github.com/mistryviral05/dockyard/internal/http/router"
+	"github.com/mistryviral05/dockyard/internal/http/utils/cloudflare"
 	"github.com/mistryviral05/dockyard/internal/logger"
 	"github.com/mistryviral05/dockyard/internal/queue"
 )
@@ -57,10 +58,15 @@ func main() {
 		slog.String("redis", cfg.Redis.Addr),
 	)
 
+	dnsClient := cloudflare.New(&cfg.Cloudflare, logger)
+	logger.Info("DNS provider ready",
+		slog.String("base_domain", dnsClient.BaseDomain()),
+	)
+
 	wsModule := workspace.New(db, logger)
 	userModule := user.New(db, logger, cfg, wsModule.Repo)
 	githubModule := github.New(db, cfg, logger)
-	agentModule := agent.New(db, logger)
+	agentModule := agent.New(db, logger, dnsClient)
 	projectModule := project.New(db, logger)
 	deploymentModule := deployment.New(db, logger, queueClient)
 	realtimeModule := realtime.New(db, cfg, logger)

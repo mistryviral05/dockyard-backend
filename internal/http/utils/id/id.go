@@ -40,6 +40,10 @@ func AgentMetricID() string {
 	return "metric_" + generate()
 }
 
+func AgentTokenID() string {
+	return "token_" + generate()
+}
+
 func DeploymentID() string {
 	return "deployment_" + generate()
 }

@@ -18,6 +18,10 @@ const (
 	tokenByteSize    = 32
 	defaultAgentPort = "8999"
 
+	signingSecretSize = 32
+	maxSubdomainLen   = 40
+	fallbackSubdomain = "agent"
+
 	serverURL = "http://localhost:8080"
 )
 
@@ -44,6 +48,37 @@ func BuildRunCommand(token, port string) string {
 		"curl -fsSL %s/api/v1/agents/install.sh | bash -s -- --token %s --server %s --port %s",
 		serverURL, token, serverURL, port,
 	)
+}
+
+func GenerateSigningSecret() (string, error) {
+	buf := make([]byte, signingSecretSize)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("generate signing secret: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func Slugify(name string) string {
+	var b strings.Builder
+
+	previousDash := false
+	for _, r := range strings.ToLower(strings.TrimSpace(name)) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+			previousDash = false
+		case !previousDash && b.Len() > 0:
+			b.WriteByte('-')
+			previousDash = true
+		}
+	}
+
+	slug := strings.Trim(b.String(), "-")
+	if len(slug) > maxSubdomainLen {
+		slug = strings.Trim(slug[:maxSubdomainLen], "-")
+	}
+
+	return slug
 }
 
 func parseMetricsQuery(values url.Values) (MetricsQuery, error) {

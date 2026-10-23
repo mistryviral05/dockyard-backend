@@ -9,8 +9,6 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
-
-
 type ContainerRegistry struct {
 	RegistryHost      string `yaml:"registry_host" env:"REGISTRY_HOST" env-required:"true"`
 	RegistryNamespace string `yaml:"registry_namespace" env:"REGISTRY_NAMESPACE" env-required:"true"`
@@ -30,6 +28,14 @@ type Centrifugo struct {
 	TokenTTL time.Duration `yaml:"token_ttl" env:"CENTRIFUGO_TOKEN_TTL" env-default:"1h"`
 }
 
+type Cloudflare struct {
+	APIToken   string        `yaml:"api_token" env:"CLOUDFLARE_API_TOKEN" env-required:"true"`
+	ZoneID     string        `yaml:"zone_id" env:"CLOUDFLARE_ZONE_ID" env-required:"true"`
+	BaseDomain string        `yaml:"base_domain" env:"CLOUDFLARE_BASE_DOMAIN" env-required:"true"`
+	RecordTTL  int           `yaml:"record_ttl" env:"CLOUDFLARE_RECORD_TTL" env-default:"60"`
+	Timeout    time.Duration `yaml:"timeout" env:"CLOUDFLARE_TIMEOUT" env-default:"15s"`
+}
+
 type Redis struct {
 	Addr     string `yaml:"addr" env:"REDIS_ADDR" env-required:"true"`
 	Password string `yaml:"password" env:"REDIS_PASSWORD" env-required:"true"`
@@ -37,7 +43,6 @@ type Redis struct {
 }
 
 type HTTPServer struct {
-
 	Addr         string        `yaml:"address" env:"HTTP_ADDRESS" env-required:"true"`
 	ReadTimeout  time.Duration `yaml:"read_timeout" env:"HTTP_READ_TIMEOUT" env-default:"10s"`
 	WriteTimeout time.Duration `yaml:"write_timeout" env:"HTTP_WRITE_TIMEOUT" env-default:"30s"`
@@ -45,7 +50,6 @@ type HTTPServer struct {
 }
 
 type CORS struct {
-
 	AllowedOrigins []string `yaml:"allowed_origins" env:"CORS_ALLOWED_ORIGINS" env-required:"true"`
 }
 
@@ -95,8 +99,8 @@ type Config struct {
 	Redis             `yaml:"redis"`
 	ContainerRegistry `yaml:"container_registry"`
 	Centrifugo        `yaml:"centrifugo"`
+	Cloudflare        `yaml:"cloudflare"`
 }
-
 
 func MustLoad() *Config {
 

@@ -5,8 +5,8 @@ import (
 	"log/slog"
 )
 
-func New(db *sql.DB, logger *slog.Logger) *Handler {
+func New(db *sql.DB, logger *slog.Logger, dns DNSProvider) *Handler {
 	repo := NewRepository(db)
-	service := NewService(repo, db)
+	service := NewService(repo, db, dns)
 	return NewHandler(service, logger)
 }

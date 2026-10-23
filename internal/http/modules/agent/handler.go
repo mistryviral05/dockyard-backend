@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/mistryviral05/dockyard/internal/http/middleware"
@@ -76,6 +77,63 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.Info("agent created", slog.String("agent_id", res.Id), slog.String("clerk_id", clerkID))
+	response.WriteJson(w, http.StatusCreated, response.GeneralData(res))
+}
+
+func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
+
+	auth := r.Header.Get("Authorization")
+	if !strings.HasPrefix(auth, "Bearer ") {
+		response.Unauthorized(w, "missing registration token")
+		return
+	}
+
+	token := strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
+	if token == "" {
+		response.Unauthorized(w, "missing registration token")
+		return
+	}
+
+	var req RegisterRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxHeartbeatBody)).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		response.BadRequest(w, "invalid request body")
+		return
+	}
+
+	if err := validator.New().Struct(req); err != nil {
+		var ve validator.ValidationErrors
+		if errors.As(err, &ve) {
+			response.WriteJson(w, http.StatusBadRequest, response.ValidationError(ve))
+			return
+		}
+		response.BadRequest(w, "invalid request")
+		return
+	}
+
+	res, err := h.service.Register(r.Context(), token, &req, middleware.ClientIP(r))
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrRegistrationTokenInvalid):
+			h.logger.Warn("agent registration rejected",
+				slog.String("remote_addr", middleware.ClientIP(r)),
+			)
+			response.Unauthorized(w, "registration token is invalid, used or expired")
+		case errors.Is(err, ErrPublicIPInvalid):
+			response.BadRequest(w, "public ip is missing or not a valid address")
+		case errors.Is(err, ErrSubdomainConflict):
+			response.NewError(w, http.StatusConflict, "could not pick a free subdomain for this agent")
+		default:
+			h.logger.Error("failed to register agent", slog.String("error", err.Error()))
+			response.InternalError(w, "failed to register the agent, please try again")
+		}
+		return
+	}
+
+	h.logger.Info("agent registered",
+		slog.String("agent_id", res.AgentID),
+		slog.String("domain", res.Domain),
+	)
+
 	response.WriteJson(w, http.StatusCreated, response.GeneralData(res))
 }
 

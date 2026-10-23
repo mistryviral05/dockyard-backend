@@ -117,6 +117,49 @@ GET {{base}}/agents/{{agentId}}
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
+# ------------------------------------------------- registration (temp token)
+
+### create an agent, copy the token from the response
+POST {{base}}/agents
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "vm1",
+  "port": "8999"
+}
+
+### register with the temp token from the create response
+@tempToken=agt_PASTE_THE_TEMP_TOKEN_HERE
+
+POST {{base}}/agents/register
+Content-Type: application/json
+Authorization: Bearer {{tempToken}}
+
+{
+  "public_ip": "65.21.10.42",
+  "os_info": "Ubuntu 24.04 (x86_64)",
+  "hostname": "vm1"
+}
+
+### 401 - the same temp token a second time
+POST {{base}}/agents/register
+Content-Type: application/json
+Authorization: Bearer {{tempToken}}
+
+{
+  "public_ip": "65.21.10.42"
+}
+
+### 400 - bad ip
+POST {{base}}/agents/register
+Content-Type: application/json
+Authorization: Bearer {{tempToken}}
+
+{
+  "public_ip": "not-an-ip"
+}
+
 # ------------------------------------------------- heartbeat (agent token)
 
 ### fake heartbeat - run this a few times to fill the chart

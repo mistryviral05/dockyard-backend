@@ -94,6 +94,30 @@ type HeartbeatResponse struct {
 	HeartbeatInterval int       `json:"heartbeat_interval_seconds"`
 }
 
+type RegisterRequest struct {
+	PublicIP string `json:"public_ip" validate:"omitempty,ip"`
+	OSInfo   string `json:"os_info" validate:"omitempty,max=255"`
+	Hostname string `json:"hostname" validate:"omitempty,max=255"`
+}
+
+type RegisterDto struct {
+	AgentID       string
+	Subdomain     string
+	PublicIP      string
+	OSInfo        string
+	SigningSecret string
+}
+
+type RegisterResponse struct {
+	AgentID           string `json:"agent_id"`
+	Token             string `json:"token"`
+	SigningSecret     string `json:"signing_secret"`
+	Domain            string `json:"domain"`
+	Wildcard          string `json:"wildcard"`
+	Port              string `json:"port"`
+	HeartbeatInterval int    `json:"heartbeat_interval_seconds"`
+}
+
 type MetricsQuery struct {
 	Window time.Duration
 	Since  time.Time

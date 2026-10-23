@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"net"
+	"strings"
 	"time"
 
 	"github.com/mistryviral05/dockyard/internal/http/utils/id"
@@ -20,16 +23,118 @@ const (
 	maxWindow       = 24 * time.Hour
 	targetPoints    = 300
 	maxSeriesPoints = 1000
+
+	subdomainAttempts = 20
 )
+
+type DNSProvider interface {
+	UpsertAgentRecords(ctx context.Context, subdomain, ip string) (domain string, wildcard string, err error)
+	AgentDomain(subdomain string) string
+}
 
 type Service struct {
 	db   *sql.DB
 	repo Repository
+	dns  DNSProvider
 }
 
-func NewService(repo Repository, db *sql.DB) *Service {
+func NewService(repo Repository, db *sql.DB, dns DNSProvider) *Service {
 
-	return &Service{repo: repo, db: db}
+	return &Service{repo: repo, db: db, dns: dns}
+}
+
+func (s *Service) Register(ctx context.Context, plainToken string, req *RegisterRequest, remoteIP string) (*RegisterResponse, error) {
+	agent, err := s.repo.FindPendingByTempToken(ctx, HashToken(plainToken))
+	if err != nil {
+		return nil, err
+	}
+
+	ip := strings.TrimSpace(req.PublicIP)
+	if ip == "" {
+		ip = remoteIP
+	}
+	if net.ParseIP(ip) == nil {
+		return nil, ErrPublicIPInvalid
+	}
+
+	subdomain, err := s.pickSubdomain(ctx, agent)
+	if err != nil {
+		return nil, err
+	}
+
+	newToken, tokenHash, err := GenerateToken()
+	if err != nil {
+		return nil, err
+	}
+
+	signingSecret, err := GenerateSigningSecret()
+	if err != nil {
+		return nil, err
+	}
+
+	domain, wildcard, err := s.dns.UpsertAgentRecords(ctx, subdomain, ip)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	txRepo := s.repo.WithTx(tx)
+
+	dto := &RegisterDto{
+		AgentID:       agent.Id,
+		Subdomain:     subdomain,
+		PublicIP:      ip,
+		OSInfo:        strings.TrimSpace(req.OSInfo),
+		SigningSecret: signingSecret,
+	}
+
+	if err := txRepo.CompleteRegistration(ctx, dto); err != nil {
+		return nil, err
+	}
+
+	if err := txRepo.InsertToken(ctx, id.AgentTokenID(), agent.Id, tokenHash, TokenTypeJWT); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &RegisterResponse{
+		AgentID:           agent.Id,
+		Token:             newToken,
+		SigningSecret:     signingSecret,
+		Domain:            domain,
+		Wildcard:          wildcard,
+		Port:              agent.Port,
+		HeartbeatInterval: heartbeatIntervalSec,
+	}, nil
+}
+
+func (s *Service) pickSubdomain(ctx context.Context, agent *Agent) (string, error) {
+	base := Slugify(agent.AgentName.String)
+	if base == "" {
+		base = fallbackSubdomain
+	}
+
+	candidate := base
+	for attempt := 2; attempt <= subdomainAttempts; attempt++ {
+		taken, err := s.repo.SubdomainTaken(ctx, candidate)
+		if err != nil {
+			return "", err
+		}
+		if !taken {
+			return candidate, nil
+		}
+		candidate = fmt.Sprintf("%s-%d", base, attempt)
+	}
+
+	return "", ErrSubdomainConflict
 }
 
 func (s *Service) Create(ctx context.Context, clerkID, name, port string) (*CreateAgentResponse, error) {
