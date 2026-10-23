@@ -80,7 +80,8 @@ else
     -p 80:80 -p 443:443 \
     -v /var/run/docker.sock:/var/run/docker.sock:ro \
     -v dockyard-certs:/certs \
-    traefik:v3.1 \
+    -e DOCKER_API_VERSION=1.44 \
+    traefik:v3.7.9 \
     --providers.docker=true \
     --providers.docker.exposedbydefault=false \
     --providers.docker.network="$NETWORK" \
