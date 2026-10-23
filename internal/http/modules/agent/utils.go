@@ -21,9 +21,9 @@ const (
 	signingSecretSize = 32
 	maxSubdomainLen   = 40
 	fallbackSubdomain = "agent"
-
-	serverURL = "http://localhost:8080"
 )
+
+var serverURL = "http://localhost:8040"
 
 func GenerateToken() (plain string, hashed string, err error) {
 	buf := make([]byte, tokenByteSize)
@@ -43,9 +43,15 @@ func CompareToken(plain, storedHash string) bool {
 	return subtle.ConstantTimeCompare([]byte(HashToken(plain)), []byte(storedHash)) == 1
 }
 
+func SetServerURL(url string) {
+	if url = strings.TrimRight(strings.TrimSpace(url), "/"); url != "" {
+		serverURL = url
+	}
+}
+
 func BuildRunCommand(token, port string) string {
 	return fmt.Sprintf(
-		"curl -fsSL %s/api/v1/agents/install.sh | bash -s -- --token %s --server %s --port %s",
+		"curl -fsSL %s/api/v1/agents/install.sh | sudo bash -s -- --token %s --server %s --port %s",
 		serverURL, token, serverURL, port,
 	)
 }

@@ -28,6 +28,12 @@ type Centrifugo struct {
 	TokenTTL time.Duration `yaml:"token_ttl" env:"CENTRIFUGO_TOKEN_TTL" env-default:"1h"`
 }
 
+type AgentInstall struct {
+	PublicAPIURL string `yaml:"public_api_url" env:"PUBLIC_API_URL" env-required:"true"`
+	Image        string `yaml:"image" env:"AGENT_IMAGE" env-default:"ghcr.io/mistryviral05/dockyard-agent:latest"`
+	ACMEEmail    string `yaml:"acme_email" env:"ACME_EMAIL" env-required:"true"`
+}
+
 type Cloudflare struct {
 	APIToken   string        `yaml:"api_token" env:"CLOUDFLARE_API_TOKEN" env-required:"true"`
 	ZoneID     string        `yaml:"zone_id" env:"CLOUDFLARE_ZONE_ID" env-required:"true"`
@@ -100,6 +106,7 @@ type Config struct {
 	ContainerRegistry `yaml:"container_registry"`
 	Centrifugo        `yaml:"centrifugo"`
 	Cloudflare        `yaml:"cloudflare"`
+	AgentInstall      `yaml:"agent_install"`
 }
 
 func MustLoad() *Config {

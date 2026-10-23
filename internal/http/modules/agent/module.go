@@ -5,8 +5,9 @@ import (
 	"log/slog"
 )
 
-func New(db *sql.DB, logger *slog.Logger, dns DNSProvider) *Handler {
+func New(db *sql.DB, logger *slog.Logger, dns DNSProvider, install InstallConfig) *Handler {
 	repo := NewRepository(db)
 	service := NewService(repo, db, dns)
-	return NewHandler(service, logger)
+	SetServerURL(install.ServerURL)
+	return NewHandler(service, logger, install)
 }

@@ -66,7 +66,11 @@ func main() {
 	wsModule := workspace.New(db, logger)
 	userModule := user.New(db, logger, cfg, wsModule.Repo)
 	githubModule := github.New(db, cfg, logger)
-	agentModule := agent.New(db, logger, dnsClient)
+	agentModule := agent.New(db, logger, dnsClient, agent.InstallConfig{
+		ServerURL: cfg.AgentInstall.PublicAPIURL,
+		Image:     cfg.AgentInstall.Image,
+		ACMEEmail: cfg.AgentInstall.ACMEEmail,
+	})
 	projectModule := project.New(db, logger)
 	deploymentModule := deployment.New(db, logger, queueClient)
 	realtimeModule := realtime.New(db, cfg, logger)

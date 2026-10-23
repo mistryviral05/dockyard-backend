@@ -18,13 +18,15 @@ const maxHeartbeatBody = 8 << 10
 type Handler struct {
 	service   *Service
 	logger    *slog.Logger
+	install   InstallConfig
 	agentAuth func(http.Handler) http.Handler
 }
 
-func NewHandler(service *Service, logger *slog.Logger) *Handler {
+func NewHandler(service *Service, logger *slog.Logger, install InstallConfig) *Handler {
 	return &Handler{
 		service:   service,
 		logger:    logger,
+		install:   install,
 		agentAuth: middleware.RequireAgentAuth(logger, service),
 	}
 }
@@ -78,6 +80,13 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.Info("agent created", slog.String("agent_id", res.Id), slog.String("clerk_id", clerkID))
 	response.WriteJson(w, http.StatusCreated, response.GeneralData(res))
+}
+
+func (h *Handler) InstallScript(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(RenderInstallScript(h.install)))
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
