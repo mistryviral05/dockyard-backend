@@ -164,11 +164,23 @@ docker pull "$AGENT_IMAGE" >/dev/null
 say "starting the agent"
 docker rm -f dockyard-agent >/dev/null 2>&1 || true
 
+# The host filesystem is mounted read only at /host so the agent reports the
+# server it runs on, not the alpine container it lives in. Without this the
+# dashboard shows "Alpine Linux" as the operating system and the disk gauge
+# measures the container overlay instead of the real disk.
 docker run -d --name dockyard-agent --restart always \
   --network "$NETWORK" \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$STATE_DIR":/var/lib/dockyard \
+  -v /:/host:ro,rslave \
   -p "$PORT":"$PORT" \
+  -e HOST_PROC=/host/proc \
+  -e HOST_SYS=/host/sys \
+  -e HOST_ETC=/host/etc \
+  -e HOST_VAR=/host/var \
+  -e HOST_RUN=/host/run \
+  -e HOST_ROOT=/host \
+  -e DOCKYARD_DISK_PATH=/host \
   -e DOCKYARD_CONTROL_PLANE_URL="$SERVER" \
   -e DOCKYARD_STATE_FILE=/var/lib/dockyard/agent.json \
   -e DOCKYARD_AGENT_ADDR="0.0.0.0:$PORT" \
