@@ -33,6 +33,7 @@ var (
 type DeploymentUpdater interface {
 	FindAgentForDeployment(ctx context.Context, deploymentID, agentID string) (bool, error)
 	Transition(ctx context.Context, id, to string, extra map[string]interface{}) (bool, error)
+	StopOtherRunning(ctx context.Context, deploymentID string) (int64, error)
 }
 
 type statusMessage struct {

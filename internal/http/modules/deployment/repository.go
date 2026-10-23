@@ -35,6 +35,7 @@ type Repository interface {
 	GetBuildContext(ctx context.Context, deploymentID string) (*BuildContext, error)
 	GetDispatchTarget(ctx context.Context, deploymentID string) (*DispatchTarget, error)
 	FindAgentForDeployment(ctx context.Context, deploymentID, agentID string) (bool, error)
+	StopOtherRunning(ctx context.Context, deploymentID string) (int64, error)
 	SetCommit(ctx context.Context, deploymentID, sha, message string) error
 	InsertLogs(ctx context.Context, deploymentID string, entries []LogEntry) error
 	ListLogs(ctx context.Context, deploymentID, clerkID, cursor string, limit int) ([]*DeploymentLog, error)
@@ -126,6 +127,28 @@ func (r *repository) FindAgentForDeployment(ctx context.Context, deploymentID, a
 	`, deploymentID, agentID).Scan(&ok)
 
 	return ok, err
+}
+
+// StopOtherRunning marks every other running deployment of the same project as
+// stopped. The agent replaces the container under one fixed name, so the moment
+// a new deployment goes live the older ones are no longer serving anything and
+// should not keep showing as live.
+func (r *repository) StopOtherRunning(ctx context.Context, deploymentID string) (int64, error) {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE deployments
+		SET status       = $2,
+		    completed_at = COALESCE(completed_at, now()),
+		    updated_at   = now()
+		WHERE project_id = (SELECT project_id FROM deployments WHERE id = $1)
+		  AND id <> $1
+		  AND status = $3
+	`, deploymentID, StatusStopped, StatusRunning)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return res.RowsAffected()
 }
 
 func (r *repository) SetCommit(ctx context.Context, deploymentID, sha, message string) error {

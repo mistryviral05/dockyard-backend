@@ -69,6 +69,16 @@ func (s *Service) RecordDeployResult(ctx context.Context, agentID, deploymentID 
 		return err
 	}
 
+	if status != statusRunningDB {
+		return nil
+	}
+
+	// Only one container per project is actually serving, so the deployments
+	// it replaced must not keep showing as live.
+	if _, err := s.deployments.StopOtherRunning(ctx, deploymentID); err != nil {
+		return err
+	}
+
 	return nil
 }
 
