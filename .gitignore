@@ -43,4 +43,7 @@ plans
 architecture
 
 # local agent state, holds the control plane token
-.agentd/ 
+.agentd/
+
+# local load testing helper
+cmd/stress/ 

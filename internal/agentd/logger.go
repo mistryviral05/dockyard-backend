@@ -43,7 +43,6 @@ func NewLogger(cfg *Config) *slog.Logger {
 	prod := isProduction(cfg.Env)
 	colour := !prod
 
-
 	addSource := level <= slog.LevelDebug
 
 	var h slog.Handler
@@ -63,7 +62,6 @@ func NewLogger(cfg *Config) *slog.Logger {
 			ReplaceAttr: textAttr,
 		})
 	}
-
 
 	return slog.New(h).With(slog.String("version", Version))
 }
@@ -87,14 +85,12 @@ func isProduction(env string) bool {
 	return e == EnvProduction || e == "prod"
 }
 
-
 func textAttr(groups []string, a slog.Attr) slog.Attr {
 	if isErrorAttr(a) {
 		return tint.Attr(9, a)
 	}
 	return a
 }
-
 
 func jsonAttr(colour bool) func([]string, slog.Attr) slog.Attr {
 	return func(groups []string, a slog.Attr) slog.Attr {

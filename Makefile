@@ -66,6 +66,12 @@ bench-rate:
 bench-heavy:
 	@$(MAKE) bench BENCH_WINDOW=6h BENCH_CONN=100 BENCH_DURATION=30
 
+STRESS_CORES?=
+STRESS_SECONDS?=120
+
+stress:
+	@go run ./cmd/stress $(if $(STRESS_CORES),-cores $(STRESS_CORES),) -seconds $(STRESS_SECONDS)
+
 bench-seed:
 	@test -n "$(AGENT_TOKEN)" || { echo "AGENT_TOKEN is required: make bench-seed AGENT_TOKEN=agt_xxx"; exit 1; }
 	@echo "sending $(SEED_COUNT) heartbeats to $(BENCH_HOST)"
@@ -106,4 +112,4 @@ migrate-version:
 migrate-force:
 	@$(MIGRATE) force $(version)
 
-.PHONY: run migrate-create migrate-up migrate-down migrate-down-all migrate-goto migrate-version migrate-force run-worker run-agent build-agent run-ping build start bench bench-latency bench-rate bench-heavy bench-seed
+.PHONY: run migrate-create migrate-up migrate-down migrate-down-all migrate-goto migrate-version migrate-force run-worker run-agent build-agent run-ping build start bench bench-latency bench-rate bench-heavy bench-seed stress

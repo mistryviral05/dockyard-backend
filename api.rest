@@ -234,3 +234,7 @@ GET {{base}}/agents/{{agentId}}/metrics/bench?window=6h
 
 
 Get-Job | Stop-Job; Get-Job | Remove-Job
+
+
+make stress STRESS_SECONDS=300
+make bench-heavy

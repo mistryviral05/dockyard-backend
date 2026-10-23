@@ -38,13 +38,17 @@ type Collector interface {
 
 type SystemCollector struct {
 	diskPath string
+	load     *loadTracker
 
 	mu     sync.Mutex
 	primed bool
 }
 
 func NewSystemCollector(diskPath string) *SystemCollector {
-	return &SystemCollector{diskPath: diskPath}
+	return &SystemCollector{
+		diskPath: diskPath,
+		load:     newLoadTracker(),
+	}
 }
 
 func (c *SystemCollector) Collect(ctx context.Context) (*Snapshot, error) {
@@ -77,12 +81,8 @@ func (c *SystemCollector) Collect(ctx context.Context) (*Snapshot, error) {
 		s.DiskUsage = v
 	}
 
-	if avg, err := load.AvgWithContext(ctx); err != nil {
+	if err := c.fillLoad(ctx, s); err != nil {
 		errs = append(errs, fmt.Errorf("load: %w", err))
-	} else {
-		s.Load1 = roundLoad(avg.Load1)
-		s.Load5 = roundLoad(avg.Load5)
-		s.Load15 = roundLoad(avg.Load15)
 	}
 
 	if info, err := host.InfoWithContext(ctx); err != nil {
@@ -117,6 +117,33 @@ func (c *SystemCollector) cpuPercent(ctx context.Context) (*float64, error) {
 	c.mu.Unlock()
 
 	return roundPercent(values[0]), nil
+}
+
+func (c *SystemCollector) fillLoad(ctx context.Context, s *Snapshot) error {
+	if runtime.GOOS == "windows" {
+		s.Load1, s.Load5, s.Load15 = c.load.update(derivedLoad(s.CPUUsage, s.CPUCores), time.Now())
+		return nil
+	}
+
+	avg, err := load.AvgWithContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	s.Load1 = roundLoad(avg.Load1)
+	s.Load5 = roundLoad(avg.Load5)
+	s.Load15 = roundLoad(avg.Load15)
+
+	return nil
+}
+
+func derivedLoad(cpuPercent *float64, cores int) *float64 {
+	if cpuPercent == nil || cores <= 0 {
+		return nil
+	}
+
+	v := *cpuPercent / 100 * float64(cores)
+	return &v
 }
 
 func memoryPercent(ctx context.Context) (*float64, error) {

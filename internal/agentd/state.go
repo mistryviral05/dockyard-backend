@@ -13,13 +13,11 @@ import (
 )
 
 const (
-
 	stateFileMode = 0o600
 	stateDirMode  = 0o700
 )
 
 var ErrStateIncomplete = errors.New("state file is missing required fields")
-
 
 type State struct {
 	AgentID           string    `json:"agent_id"`
@@ -27,7 +25,6 @@ type State struct {
 	SigningSecret     string    `json:"signing_secret"`      // HMAC, symmetric
 	RegisteredAt      time.Time `json:"registered_at"`
 }
-
 
 func LoadState(log *slog.Logger, path string) (*State, error) {
 	data, err := os.ReadFile(path)
@@ -67,7 +64,6 @@ func LoadState(log *slog.Logger, path string) (*State, error) {
 	return &s, nil
 }
 
-
 func SaveState(log *slog.Logger, path string, s *State) error {
 	if s == nil {
 		return errors.New("save state: nil state")
@@ -98,7 +94,6 @@ func SaveState(log *slog.Logger, path string, s *State) error {
 		os.Remove(tmpName)
 	}()
 
-
 	if err := tmp.Chmod(stateFileMode); err != nil && runtime.GOOS != "windows" {
 		return fmt.Errorf("chmod temp state file: %w", err)
 	}
@@ -106,7 +101,6 @@ func SaveState(log *slog.Logger, path string, s *State) error {
 	if _, err := tmp.Write(data); err != nil {
 		return fmt.Errorf("write temp state file: %w", err)
 	}
-
 
 	if err := tmp.Sync(); err != nil {
 		return fmt.Errorf("sync temp state file: %w", err)
@@ -133,7 +127,6 @@ func SaveState(log *slog.Logger, path string, s *State) error {
 	return nil
 }
 
-
 func (s *State) IsRegistered() bool {
 	return s != nil && s.AgentID != "" && s.ControlPlaneToken != "" && s.SigningSecret != ""
 }
@@ -144,7 +137,6 @@ func (s *State) validate() error {
 	}
 	return nil
 }
-
 
 func CheckStatePerms(path string) error {
 	if runtime.GOOS == "windows" {
