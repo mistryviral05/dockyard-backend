@@ -4,7 +4,7 @@ import "time"
 
 type CreateProjectRequest struct {
 	Name        string `json:"project_name" validate:"required,min=2,max=255"`
-	Stack       string `json:"project_stack" validate:"required,oneof=nextjs nodejs react go fastapi python django express"`
+	Stack       string `json:"project_stack" validate:"required,oneof=nextjs nodejs react go fastapi python django express fastify"`
 	WorkspaceId string `json:"workspace_id" validate:"required,max=64"`
 
 	RepositoryRequest
